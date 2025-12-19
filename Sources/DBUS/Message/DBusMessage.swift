@@ -95,6 +95,130 @@ public struct DBusRequest: Sendable {
       body: body
     )
   }
+
+  /// Creates a D-Bus method return message responding to a method call.
+  ///
+  /// - Parameters:
+  ///   - request: The original method call being replied to.
+  ///   - body: The return values for the method. Defaults to an empty body.
+  ///
+  /// - Returns: A configured ``DBusRequest`` representing the method return.
+  public static func createMethodReturn(replyingTo request: DBusMessage, body: [DBusValue] = [])
+    -> DBusRequest
+  {
+    var headerFields: [HeaderField] = [
+      HeaderField(code: .replySerial, variant: DBusVariant(.uint32(request.serial)))
+    ]
+
+    if let sender = request.sender {
+      headerFields.append(
+        HeaderField(code: .destination, variant: DBusVariant(.string(sender)))
+      )
+    }
+
+    if !body.isEmpty {
+      headerFields.append(
+        HeaderField(
+          code: .signature,
+          variant: DBusVariant(.signature(body.map(\.dbusTypeSignature).joined()))
+        )
+      )
+    }
+
+    return DBusRequest(
+      byteOrder: .host,
+      messageType: .methodReturn,
+      flags: [],
+      protocolVersion: 1,
+      headerFields: headerFields,
+      body: body
+    )
+  }
+
+  /// Creates a D-Bus error message responding to a method call.
+  ///
+  /// - Parameters:
+  ///   - request: The original method call being replied to.
+  ///   - errorName: The D-Bus error name (e.g. "org.freedesktop.DBus.Error.UnknownMethod").
+  ///   - body: Optional error payload values.
+  public static func createError(
+    replyingTo request: DBusMessage, errorName: String, body: [DBusValue] = []
+  ) -> DBusRequest {
+    var headerFields: [HeaderField] = [
+      HeaderField(code: .errorName, variant: DBusVariant(.string(errorName))),
+      HeaderField(code: .replySerial, variant: DBusVariant(.uint32(request.serial))),
+    ]
+
+    if let sender = request.sender {
+      headerFields.append(
+        HeaderField(code: .destination, variant: DBusVariant(.string(sender)))
+      )
+    }
+
+    if !body.isEmpty {
+      headerFields.append(
+        HeaderField(
+          code: .signature,
+          variant: DBusVariant(.signature(body.map(\.dbusTypeSignature).joined()))
+        )
+      )
+    }
+
+    return DBusRequest(
+      byteOrder: .host,
+      messageType: .error,
+      flags: [],
+      protocolVersion: 1,
+      headerFields: headerFields,
+      body: body
+    )
+  }
+
+  /// Creates a D-Bus signal message.
+  ///
+  /// - Parameters:
+  ///   - path: The object path the signal originates from.
+  ///   - interface: The interface name.
+  ///   - name: The signal name.
+  ///   - destination: Optional destination unique/bus name. Signals normally broadcast; provide to limit.
+  ///   - body: Signal payload values.
+  public static func createSignal(
+    path: String,
+    interface: String,
+    name: String,
+    destination: String? = nil,
+    body: [DBusValue] = []
+  ) -> DBusRequest {
+    var headerFields: [HeaderField] = [
+      HeaderField(code: .path, variant: DBusVariant(.objectPath(path))),
+      HeaderField(code: .interface, variant: DBusVariant(.string(interface))),
+      HeaderField(code: .member, variant: DBusVariant(.string(name))),
+    ]
+
+    if let destination {
+      headerFields.append(
+        HeaderField(code: .destination, variant: DBusVariant(.string(destination)))
+      )
+    }
+
+    if !body.isEmpty {
+      headerFields.append(
+        HeaderField(
+          code: .signature,
+          variant: DBusVariant(.signature(body.map(\.dbusTypeSignature).joined()))
+        )
+      )
+    }
+
+    return DBusRequest(
+      byteOrder: .host,
+      messageType: .signal,
+      flags: [],
+      protocolVersion: 1,
+      headerFields: headerFields,
+      body: body
+    )
+  }
 }
 
 /// A D-Bus message that can be sent or received over a D-Bus connection.
@@ -160,6 +284,58 @@ public struct DBusMessage: Sendable {
       return nil
     }
     return replyTo
+  }
+
+  /// The object path the message targets, if present.
+  public var path: String? {
+    guard
+      case .objectPath(let path) = headerFields.first(where: { $0.code == .path })?.variant.value
+    else {
+      return nil
+    }
+    return path
+  }
+
+  /// The interface the message references, if present.
+  public var interface: String? {
+    guard
+      case .string(let interface) = headerFields.first(where: { $0.code == .interface })?.variant
+        .value
+    else {
+      return nil
+    }
+    return interface
+  }
+
+  /// The method/signal member name, if present.
+  public var member: String? {
+    guard
+      case .string(let member) = headerFields.first(where: { $0.code == .member })?.variant.value
+    else {
+      return nil
+    }
+    return member
+  }
+
+  /// The unique or well-known name of the sender, if provided by the bus.
+  public var sender: String? {
+    guard
+      case .string(let sender) = headerFields.first(where: { $0.code == .sender })?.variant.value
+    else {
+      return nil
+    }
+    return sender
+  }
+
+  /// The unique or well-known name of the destination, if provided.
+  public var destination: String? {
+    guard
+      case .string(let destination) = headerFields.first(where: { $0.code == .destination })?.variant
+        .value
+    else {
+      return nil
+    }
+    return destination
   }
 
   private static func readValue(
