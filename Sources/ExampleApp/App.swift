@@ -6,6 +6,8 @@ import NIOCore
   import Glibc
 #elseif canImport(Darwin)
   import Darwin
+#elseif canImport(Musl)
+  import Musl
 #endif
 
 @available(macOS 10.15, *)
