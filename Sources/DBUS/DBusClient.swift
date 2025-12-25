@@ -335,7 +335,11 @@ public actor DBusClient: Sendable {
       logger: logger
     ) { replies, send in
       let connection = Connection(send: send, logger: logger)
-      async let _ = connection.run(replies: &replies)
+      var replyLoop = replies
+      let runTask = Task {
+        try await connection.run(replies: &replyLoop)
+      }
+      defer { runTask.cancel() }
 
       guard
         let helloReply = try await connection.send(
@@ -445,7 +449,11 @@ public actor DBusClient: Sendable {
       logger: logger
     ) { replies, send in
       let connection = Connection(send: send, logger: logger)
-      async let _ = connection.run(replies: &replies)
+      var replyLoop = replies
+      let runTask = Task {
+        try await connection.run(replies: &replyLoop)
+      }
+      defer { runTask.cancel() }
 
       guard
         let helloReply = try await connection.send(

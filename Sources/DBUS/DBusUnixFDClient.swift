@@ -290,7 +290,10 @@ import NIOCore
       var replies = Replies(iterator: stream.makeAsyncIterator())
       let send = Send(socket: socket, unixFdsEnabled: unixFdsNegotiated)
       let connection = Connection(send: send, logger: logger)
-      async let _ = connection.run(replies: &replies)
+      let runTask = Task {
+        try await connection.run(replies: &replies)
+      }
+      defer { runTask.cancel() }
 
       guard
         let helloReply = try await connection.send(
