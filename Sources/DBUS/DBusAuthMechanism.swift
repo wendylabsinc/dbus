@@ -1,10 +1,9 @@
+import Crypto
 import Foundation
 
 #if canImport(Glibc)
-import Glibc
+  import Glibc
 #endif
-
-import Crypto
 
 internal enum DBusAuthMechanism: Equatable {
   case external(userID: String)
@@ -18,14 +17,18 @@ internal enum DBusAuthMechanism: Equatable {
     case .external(let userID):
       mechanisms.append(.external(userID: userID))
       if let cookieInfo = DBusAuthUser.cookieInfo(userID: userID) {
-        mechanisms.append(.cookieSha256(userName: cookieInfo.userName, homeDirectory: cookieInfo.homeDirectory))
-        mechanisms.append(.cookieSha1(userName: cookieInfo.userName, homeDirectory: cookieInfo.homeDirectory))
+        mechanisms.append(
+          .cookieSha256(userName: cookieInfo.userName, homeDirectory: cookieInfo.homeDirectory))
+        mechanisms.append(
+          .cookieSha1(userName: cookieInfo.userName, homeDirectory: cookieInfo.homeDirectory))
       }
     case .anonymous:
       mechanisms.append(.anonymous)
       if let cookieInfo = DBusAuthUser.cookieInfo(userID: nil) {
-        mechanisms.append(.cookieSha256(userName: cookieInfo.userName, homeDirectory: cookieInfo.homeDirectory))
-        mechanisms.append(.cookieSha1(userName: cookieInfo.userName, homeDirectory: cookieInfo.homeDirectory))
+        mechanisms.append(
+          .cookieSha256(userName: cookieInfo.userName, homeDirectory: cookieInfo.homeDirectory))
+        mechanisms.append(
+          .cookieSha1(userName: cookieInfo.userName, homeDirectory: cookieInfo.homeDirectory))
       }
     }
     return mechanisms
@@ -126,7 +129,9 @@ internal enum DBusAuthCookie {
     hash: DBusAuthHash
   ) throws -> String {
     let decoded = try DBusAuthEncoding.decodeHexString(dataHex)
-    let parts = decoded.split(whereSeparator: { $0 == " " || $0 == "\t" || $0 == "\n" || $0 == "\r" })
+    let parts = decoded.split(whereSeparator: {
+      $0 == " " || $0 == "\t" || $0 == "\n" || $0 == "\r"
+    })
     guard parts.count == 3 else {
       throw DBusAuthenticationError.invalidAuthCommand
     }
@@ -198,11 +203,11 @@ private enum DBusAuthUser {
 
   private static func resolveUserName(userID: String?) -> String? {
     #if canImport(Glibc)
-    if let userID, let uid = UInt32(userID) {
-      if let entry = getpwuid(uid_t(uid)) {
-        return String(cString: entry.pointee.pw_name)
+      if let userID, let uid = UInt32(userID) {
+        if let entry = getpwuid(uid_t(uid)) {
+          return String(cString: entry.pointee.pw_name)
+        }
       }
-    }
     #endif
 
     if let userID, !userID.isEmpty {
@@ -214,10 +219,10 @@ private enum DBusAuthUser {
     }
 
     #if canImport(Glibc)
-    let uid = getuid()
-    if let entry = getpwuid(uid) {
-      return String(cString: entry.pointee.pw_name)
-    }
+      let uid = getuid()
+      if let entry = getpwuid(uid) {
+        return String(cString: entry.pointee.pw_name)
+      }
     #endif
 
     return nil
@@ -229,12 +234,12 @@ private enum DBusAuthUser {
     }
 
     #if canImport(Glibc)
-    if let entry = getpwnam(userName) {
-      return String(cString: entry.pointee.pw_dir)
-    }
-    if let userID, let uid = UInt32(userID), let entry = getpwuid(uid_t(uid)) {
-      return String(cString: entry.pointee.pw_dir)
-    }
+      if let entry = getpwnam(userName) {
+        return String(cString: entry.pointee.pw_dir)
+      }
+      if let userID, let uid = UInt32(userID), let entry = getpwuid(uid_t(uid)) {
+        return String(cString: entry.pointee.pw_dir)
+      }
     #endif
 
     return FileManager.default.homeDirectoryForCurrentUser.path

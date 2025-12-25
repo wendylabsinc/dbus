@@ -403,7 +403,8 @@ public struct DBusMessage: Sendable {
   /// The unique or well-known name of the destination, if provided.
   public var destination: String? {
     guard
-      case .string(let destination) = headerFields.first(where: { $0.code == .destination })?.variant
+      case .string(let destination) = headerFields.first(where: { $0.code == .destination })?
+        .variant
         .value
     else {
       return nil

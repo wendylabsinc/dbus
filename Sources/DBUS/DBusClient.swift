@@ -67,7 +67,8 @@ public actor DBusClient: Sendable {
           metadata: [
             "replyTo": "\(String(describing: message.replyTo))"
           ])
-        if let replyTo = message.replyTo, let continuation = continuations.removeValue(forKey: replyTo)
+        if let replyTo = message.replyTo,
+          let continuation = continuations.removeValue(forKey: replyTo)
         {
           continuation.yield(message)
           continuation.finish()
