@@ -1,5 +1,10 @@
 import Crypto
-import Foundation
+
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#elseif canImport(Foundation)
+  import Foundation
+#endif
 
 #if canImport(Glibc)
   import Glibc
@@ -153,8 +158,10 @@ internal enum DBusAuthCookie {
     id: String,
     homeDirectory: String
   ) throws -> String {
-    let path = (homeDirectory as NSString).appendingPathComponent(".dbus-keyrings/\(context)")
-    let contents = try String(contentsOfFile: path, encoding: .utf8)
+    let keyringURL = URL(fileURLWithPath: homeDirectory)
+      .appendingPathComponent(".dbus-keyrings")
+      .appendingPathComponent(context)
+    let contents = try String(contentsOf: keyringURL, encoding: .utf8)
     for line in contents.split(whereSeparator: \.isNewline) {
       let fields = line.split(whereSeparator: \.isWhitespace)
       guard fields.count >= 3 else { continue }

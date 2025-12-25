@@ -1,8 +1,13 @@
-import Foundation
 import Logging
 import NIO
 import NIOCore
 import NIOExtras
+
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#elseif canImport(Foundation)
+  import Foundation
+#endif
 
 /// A client for communicating with D-Bus services.
 ///

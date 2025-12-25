@@ -1,7 +1,12 @@
 import Dispatch
-import Foundation
 import Logging
 import NIOCore
+
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#elseif canImport(Foundation)
+  import Foundation
+#endif
 
 #if canImport(Glibc)
   import Glibc

@@ -1,8 +1,13 @@
-import Foundation
 import Logging
 import NIO
 import NIOCore
 import NIOExtras
+
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#elseif canImport(Foundation)
+  import Foundation
+#endif
 
 /// compiler directive that checks if the Darwin framework can be imported.
 /// The Darwin framework is only available on Apple platforms (macOS, iOS, iPadOS, tvOS, watchOS),

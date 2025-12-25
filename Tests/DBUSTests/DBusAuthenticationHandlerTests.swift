@@ -1,5 +1,9 @@
-import Crypto
+#if canImport(FoundationEssentials)
+import FoundationEssentials
+#elseif canImport(Foundation)
 import Foundation
+#endif
+import Crypto
 import Logging
 import NIO
 import NIOCore
