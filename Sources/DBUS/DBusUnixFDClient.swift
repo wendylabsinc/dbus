@@ -11,6 +11,9 @@ import NIOCore
 #if canImport(Glibc)
   import Glibc
 
+  /// A D-Bus client that supports UNIX_FD passing (Linux only).
+  ///
+  /// Use this client when you need to send or receive file descriptors (`h` values).
   @available(macOS 10.15, iOS 13, *)
   public enum DBusUnixFDClient {
     private final class ContinuationBox: @unchecked Sendable {
@@ -20,6 +23,7 @@ import NIOCore
         self.continuation = continuation
       }
     }
+    /// Async sequence wrapper for inbound messages.
     public struct Replies: @unchecked Sendable {
       fileprivate var iterator: AsyncThrowingStream<DBusMessage, Error>.AsyncIterator
 
@@ -32,6 +36,7 @@ import NIOCore
       }
     }
 
+    /// Sends messages over an established D-Bus connection.
     public actor Send {
       public private(set) var serial: UInt32 = 0
       private let socket: UnixFDSocket
@@ -76,6 +81,7 @@ import NIOCore
       }
     }
 
+    /// Represents a live D-Bus connection with reply tracking.
     public actor Connection: Sendable {
       public private(set) var send: Send
       let logger: Logger
@@ -230,6 +236,7 @@ import NIOCore
       }
     }
 
+    /// Connects to a D-Bus address and executes a handler with the connection.
     public static func withConnection<R: Sendable>(
       to address: SocketAddress,
       auth: AuthType,
@@ -301,6 +308,7 @@ import NIOCore
       return try await handler(connection)
     }
 
+    /// Connects to a parsed D-Bus address and executes a handler with the connection.
     public static func withConnection<R: Sendable>(
       to address: DBusAddress,
       auth: AuthType,
@@ -323,6 +331,7 @@ import NIOCore
       }
     }
 
+    /// Connects to a D-Bus address string and executes a handler with the connection.
     public static func withConnection<R: Sendable>(
       to address: String,
       auth: AuthType,
@@ -340,6 +349,7 @@ import NIOCore
       )
     }
 
+    /// Connects to the session bus resolved from the environment.
     public static func withSessionBus<R: Sendable>(
       auth: AuthType,
       enableUnixFDs: Bool = true,
@@ -356,6 +366,7 @@ import NIOCore
       )
     }
 
+    /// Connects to the system bus resolved from the environment.
     public static func withSystemBus<R: Sendable>(
       auth: AuthType,
       enableUnixFDs: Bool = true,
@@ -506,6 +517,9 @@ import NIOCore
   }
 #else
   @available(macOS 10.15, iOS 13, *)
+  /// A D-Bus client that supports UNIX_FD passing (Linux only).
+  ///
+  /// On platforms without `Glibc`, these APIs throw ``DBusError/unixFdUnsupported``.
   public enum DBusUnixFDClient {
     public struct Replies: @unchecked Sendable {
       public init() {}

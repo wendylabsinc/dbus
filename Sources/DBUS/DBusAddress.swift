@@ -6,6 +6,7 @@ import NIOCore
   import Foundation
 #endif
 
+/// Errors that can occur while parsing or resolving D-Bus addresses.
 public enum DBusAddressError: Error, Equatable {
   case emptyAddress
   case noSupportedAddress
@@ -35,6 +36,14 @@ public enum DBusAddress: Sendable, Equatable {
   /// `nonce-tcp:host=host,port=1234,noncefile=/path[,family=ipv4|ipv6]`
   case nonceTcp(host: String, port: Int, family: Family?, nonceFile: String)
 
+  /// Parses a D-Bus address string and returns the first supported entry.
+  ///
+  /// D-Bus address strings can contain multiple entries separated by `;`.
+  /// This method returns the first entry this library supports.
+  ///
+  /// - Parameter address: The raw address string (for example, `"unix:path=/tmp/dbus"`).
+  /// - Returns: The parsed ``DBusAddress``.
+  /// - Throws: ``DBusAddressError`` when the string is empty or malformed.
   public static func parse(_ address: String) throws -> DBusAddress {
     let trimmed = address.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else {
@@ -58,6 +67,10 @@ public enum DBusAddress: Sendable, Equatable {
     throw DBusAddressError.noSupportedAddress
   }
 
+  /// Resolves the session bus address using standard environment variables.
+  ///
+  /// - Returns: The session bus ``DBusAddress``.
+  /// - Throws: ``DBusAddressError/missingSessionBusAddress`` if no address can be resolved.
   public static func sessionBusAddress() throws -> DBusAddress {
     if let address = ProcessInfo.processInfo.environment["DBUS_SESSION_BUS_ADDRESS"],
       !address.isEmpty
@@ -70,6 +83,9 @@ public enum DBusAddress: Sendable, Equatable {
     throw DBusAddressError.missingSessionBusAddress
   }
 
+  /// Resolves the system bus address using standard environment variables.
+  ///
+  /// - Returns: The system bus ``DBusAddress``.
   public static func systemBusAddress() throws -> DBusAddress {
     if let address = ProcessInfo.processInfo.environment["DBUS_SYSTEM_BUS_ADDRESS"],
       !address.isEmpty

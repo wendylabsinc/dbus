@@ -1,3 +1,4 @@
+/// Errors raised by the DBUS library during encoding, decoding, or transport.
 public enum DBusError: Error {
   case earlyEOF
   case invalidByteOrder

@@ -7,6 +7,7 @@ import Logging
 public actor DBusObjectServer: Sendable {
   // MARK: Public helper types
 
+  /// Describes an argument in introspection metadata.
   public struct MethodArg: Sendable {
     public let name: String
     public let type: String
@@ -17,6 +18,7 @@ public actor DBusObjectServer: Sendable {
     }
   }
 
+  /// Defines a method that can be invoked by remote callers.
   public struct Method: Sendable {
     public let name: String
     public let inputArgs: [MethodArg]
@@ -36,6 +38,7 @@ public actor DBusObjectServer: Sendable {
     }
   }
 
+  /// Describes a property exposed by an interface.
   public struct Property: Sendable {
     public enum Access: String, Sendable {
       case read = "read"
@@ -88,6 +91,7 @@ public actor DBusObjectServer: Sendable {
     }
   }
 
+  /// Describes a signal exposed by an interface.
   public struct Signal: Sendable {
     public let name: String
     public let args: [MethodArg]
@@ -98,6 +102,7 @@ public actor DBusObjectServer: Sendable {
     }
   }
 
+  /// Groups methods, properties, and signals under a D-Bus interface name.
   public struct Interface: Sendable {
     public let name: String
     public var methods: [Method]
@@ -117,6 +122,7 @@ public actor DBusObjectServer: Sendable {
     }
   }
 
+  /// Represents a D-Bus object path and its exported interfaces.
   public struct ExportedObject: Sendable {
     public let path: String
     public var interfaces: [Interface]
@@ -133,6 +139,7 @@ public actor DBusObjectServer: Sendable {
     }
   }
 
+  /// Context passed to method handlers.
   public struct MethodCallContext: Sendable {
     public let message: DBusMessage
     public let connection: any DBusServerConnection
@@ -144,6 +151,7 @@ public actor DBusObjectServer: Sendable {
     public var sender: String? { message.sender }
   }
 
+  /// Context passed to property getters and setters.
   public struct PropertyContext: Sendable {
     public let message: DBusMessage
     public let connection: any DBusServerConnection
@@ -158,6 +166,7 @@ public actor DBusObjectServer: Sendable {
   private let connection: any DBusServerConnection
   private let logger: Logger
 
+  /// Creates a server bound to a connection.
   public init(
     connection: any DBusServerConnection,
     logger: Logger = Logger(label: "dbus.server")

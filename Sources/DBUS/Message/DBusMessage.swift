@@ -1,5 +1,9 @@
 import NIOCore
 
+/// A high-level builder for D-Bus messages sent by clients or servers.
+///
+/// ``DBusRequest`` captures the headers, body, and flags needed to construct
+/// a full ``DBusMessage`` with an assigned serial number.
 public struct DBusRequest: Sendable {
   /// The byte order used for encoding numeric values in this message.
   public var byteOrder: Endianness

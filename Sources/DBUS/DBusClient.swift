@@ -545,6 +545,9 @@ public actor DBusClient: Sendable {
     )
   }
 
+  /// Connects to the session bus resolved from the environment.
+  ///
+  /// This is a convenience wrapper around ``DBusAddress/sessionBusAddress()``.
   public static func withSessionBus<R: Sendable>(
     auth: AuthType,
     enableUnixFDs: Bool = false,
@@ -561,6 +564,9 @@ public actor DBusClient: Sendable {
     )
   }
 
+  /// Connects to the system bus resolved from the environment.
+  ///
+  /// This is a convenience wrapper around ``DBusAddress/systemBusAddress()``.
   public static func withSystemBus<R: Sendable>(
     auth: AuthType,
     enableUnixFDs: Bool = false,
