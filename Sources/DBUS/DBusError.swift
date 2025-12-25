@@ -1,8 +1,9 @@
-enum DBusError: Error {
+public enum DBusError: Error {
   case earlyEOF
   case invalidByteOrder
   case invalidMessageType
   case invalidHeader
+  case invalidBody
   case truncatedHeaderFields
   case invalidHeaderField
   case invalidString
@@ -12,4 +13,9 @@ enum DBusError: Error {
   case missingReply
   case unexpectedMessageType
   case truncatedBody
+  case unixFdNotNegotiated
+  case unixFdMissing
+  case unixFdControlTruncated
+  case unixFdUnsupported
+  case timeout
 }

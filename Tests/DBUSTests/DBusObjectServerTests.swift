@@ -39,6 +39,45 @@ struct DBusObjectServerTests {
     )
     #expect(sent[0].body.first?.string == "Pong")
   }
+
+  @Test
+  func noReplyExpectedSkipsErrorReplies() async throws {
+    let conn = MockConnection()
+    let logger = Logger(label: "dbus.test.server")
+    let server = DBusObjectServer(connection: conn, logger: logger)
+
+    var iface = DBusObjectServer.Interface(name: "org.test.Echo")
+    iface.methods = [
+      .init(name: "Boom") { _ in
+        throw DBusServerError.failed(reason: "boom")
+      }
+    ]
+    await server.export(.init(path: "/org/test/Echo", interfaces: [iface]))
+
+    await conn.waitForHandler()
+
+    let call = DBusMessage.createMethodCall(
+      destination: "org.test",
+      path: "/org/test/Echo",
+      interface: "org.test.Echo",
+      method: "Boom",
+      serial: 2,
+      body: [],
+      flags: [.noReplyExpected]
+    )
+
+    await conn.emit(call)
+    let sent = await conn.sentRequests()
+    #expect(sent.isEmpty)
+  }
+
+  @Test
+  func unknownPropertyUsesUnknownPropertyErrorName() {
+    #expect(
+      DBusServerError.unknownProperty.errorName
+        == "org.freedesktop.DBus.Error.UnknownProperty"
+    )
+  }
 }
 
 actor MockConnection: DBusServerConnection {

@@ -216,6 +216,15 @@ struct TypeSignatureTests {
     }
   }
 
+  @Test func dictEntryOutsideArray() throws {
+    do {
+      let _ = try DBusTypeSignature("{sv}")
+      #expect(Bool(false), "Expected dictEntryOutsideArray error")
+    } catch let error as DBusTypeSignature.Error {
+      #expect(error == .dictEntryOutsideArray)
+    }
+  }
+
   @Test func emptyStructs() throws {
     // Empty structs are not allowed
     do {
@@ -316,7 +325,8 @@ extension DBusTypeSignature.Error: Equatable {
       (.tooLong, .tooLong),
       (.tooDeep, .tooDeep),
       (.emptyStruct, .emptyStruct),
-      (.invalidDictKey, .invalidDictKey):
+      (.invalidDictKey, .invalidDictKey),
+      (.dictEntryOutsideArray, .dictEntryOutsideArray):
       return true
     case (.invalidTypeChar(let lc), .invalidTypeChar(let rc)):
       return lc == rc

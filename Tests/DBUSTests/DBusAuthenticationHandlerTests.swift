@@ -1,8 +1,16 @@
+import Crypto
+import Foundation
 import Logging
 import NIO
 import NIOCore
 import NIOExtras
 import Testing
+
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 
 @testable import DBUS
 
@@ -18,17 +26,49 @@ struct DBusAuthenticationHandlerTests {
     // Activate the channel
     channel.pipeline.fireChannelActive()
 
-    // Verify the NUL byte was sent followed by AUTH command
+    // Verify the NUL byte was sent
     if let data = try channel.readOutbound(as: ByteBuffer.self) {
+      #expect(data.readableBytes == 1, "Expected single-byte NUL preface")
       #expect(data.getInteger(at: 0, as: UInt8.self) == 0, "First byte should be NUL (0)")
-
-      // Check the AUTH command follows the NUL byte
-      let command = data.getString(at: 1, length: data.readableBytes - 1)
-      #expect(command == "AUTH ANONYMOUS\r\n", "Expected ANONYMOUS auth command")
     } else {
       #expect(Bool(false), "No outbound message was sent")
     }
 
+    // Check the AUTH command follows
+    if let authData = try channel.readOutbound(as: ByteBuffer.self) {
+      let command = String(buffer: authData)
+      #expect(command == "AUTH ANONYMOUS\r\n", "Expected ANONYMOUS auth command")
+    } else {
+      #expect(Bool(false), "No AUTH command was sent")
+    }
+
+    try channel.close().wait()
+  }
+
+  @Test func initialBytesAreSentBeforeNul() throws {
+    let channel = EmbeddedChannel()
+    let initialBytes: [UInt8] = [0x12, 0x34, 0x56]
+    try DBusClient.addToPipeline(channel.pipeline, auth: .anonymous, initialBytes: initialBytes)
+
+    channel.pipeline.fireChannelActive()
+
+    if let data = try channel.readOutbound(as: ByteBuffer.self) {
+      let expectedLength = initialBytes.count + 1
+      #expect(data.readableBytes == expectedLength, "Expected nonce bytes plus NUL")
+      guard let sentBytes = data.getBytes(at: 0, length: initialBytes.count) else {
+        #expect(Bool(false), "Expected nonce bytes to be readable")
+        return
+      }
+      #expect(sentBytes == initialBytes, "Expected nonce bytes first")
+      #expect(
+        data.getInteger(at: initialBytes.count, as: UInt8.self) == 0,
+        "Expected NUL byte after nonce"
+      )
+    } else {
+      #expect(Bool(false), "No outbound message was sent")
+    }
+
+    _ = try channel.readOutbound(as: ByteBuffer.self)
     try channel.close().wait()
   }
 
@@ -47,18 +87,116 @@ struct DBusAuthenticationHandlerTests {
     // Activate the channel
     channel.pipeline.fireChannelActive()
 
-    // Verify the NUL byte was sent followed by AUTH EXTERNAL command
+    // Verify the NUL byte was sent
     if let data = try channel.readOutbound(as: ByteBuffer.self) {
+      #expect(data.readableBytes == 1, "Expected single-byte NUL preface")
       #expect(data.getInteger(at: 0, as: UInt8.self) == 0, "First byte should be NUL (0)")
+    } else {
+      #expect(Bool(false), "No outbound message was sent")
+    }
 
-      // Check the AUTH command follows the NUL byte with correctly encoded user ID
-      let command = data.getString(at: 1, length: data.readableBytes - 1)
+    // Check the AUTH command follows the NUL byte with correctly encoded user ID
+    if let authData = try channel.readOutbound(as: ByteBuffer.self) {
+      let command = String(buffer: authData)
       #expect(
         command == "AUTH EXTERNAL \(expectedHexUserId)\r\n",
         "Expected EXTERNAL auth command with hex-encoded user ID")
     } else {
-      #expect(Bool(false), "No outbound message was sent")
+      #expect(Bool(false), "No AUTH command was sent")
     }
+
+    try channel.close().wait()
+  }
+
+  @Test func cookieSha1FallbackComputesDigest() throws {
+    let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let keyringDir = tempDir.appendingPathComponent(".dbus-keyrings")
+    try FileManager.default.createDirectory(at: keyringDir, withIntermediateDirectories: true)
+
+    let context = "org_freedesktop_general"
+    let cookieId = "1"
+    let cookieValue = "cafebabe"
+    let cookieLine = "\(cookieId) 0 \(cookieValue)\n"
+    try cookieLine.write(
+      to: keyringDir.appendingPathComponent(context),
+      atomically: true,
+      encoding: .utf8
+    )
+
+    let originalHome = ProcessInfo.processInfo.environment["HOME"]
+    setenv("HOME", tempDir.path, 1)
+    defer {
+      if let originalHome {
+        setenv("HOME", originalHome, 1)
+      } else {
+        unsetenv("HOME")
+      }
+    }
+
+    #if canImport(Glibc)
+    let userId = String(getuid())
+    #else
+    let userId = "0"
+    #endif
+
+    let mechanisms = DBusAuthMechanism.preferred(for: .external(userID: userId))
+    let cookieMechanism = mechanisms.first { mechanism in
+      if case .cookieSha1 = mechanism { return true }
+      return false
+    }
+    guard case .cookieSha1(let userName, _) = cookieMechanism else {
+      #expect(Bool(false), "Expected cookie SHA1 mechanism")
+      return
+    }
+
+    let channel = EmbeddedChannel()
+    try DBusClient.addToPipeline(channel.pipeline, auth: .external(userID: userId))
+    channel.pipeline.fireChannelActive()
+
+    _ = try channel.readOutbound(as: ByteBuffer.self)
+    _ = try channel.readOutbound(as: ByteBuffer.self)
+
+    var rejectedBuffer = channel.allocator.buffer(capacity: 64)
+    rejectedBuffer.writeString("REJECTED DBUS_COOKIE_SHA1\r\n")
+    try channel.writeInbound(rejectedBuffer)
+
+    if let authData = try channel.readOutbound(as: ByteBuffer.self) {
+      let command = String(buffer: authData)
+      let expected = "AUTH DBUS_COOKIE_SHA1 \(DBusAuthEncoding.hexEncode(userName))\r\n"
+      #expect(command == expected, "Expected COOKIE_SHA1 auth with hex username")
+    } else {
+      #expect(Bool(false), "No COOKIE_SHA1 AUTH was sent")
+    }
+
+    let serverChallenge = "deadbeef"
+    let serverData = "\(context) \(cookieId) \(serverChallenge)"
+    let serverDataHex = DBusAuthEncoding.hexEncode(serverData)
+    var dataBuffer = channel.allocator.buffer(capacity: serverDataHex.count + 16)
+    dataBuffer.writeString("DATA \(serverDataHex)\r\n")
+    try channel.writeInbound(dataBuffer)
+
+    guard let responseBuffer = try channel.readOutbound(as: ByteBuffer.self) else {
+      #expect(Bool(false), "No DATA response sent")
+      return
+    }
+    let responseLine = String(buffer: responseBuffer)
+    #expect(responseLine.hasPrefix("DATA "), "Expected DATA response")
+
+    let responseHex = responseLine.dropFirst(5).trimmingCharacters(in: .whitespacesAndNewlines)
+    let decoded = try DBusAuthEncoding.decodeHexString(responseHex)
+    let parts = decoded.split(whereSeparator: \.isWhitespace)
+    guard parts.count == 2 else {
+      #expect(Bool(false), "Expected client challenge and digest")
+      return
+    }
+
+    let clientChallenge = String(parts[0])
+    let digest = String(parts[1])
+    let composite = "\(serverChallenge):\(clientChallenge):\(cookieValue)"
+    let expectedDigest = Insecure.SHA1.hash(data: Array(composite.utf8))
+      .map { String(format: "%02x", $0) }
+      .joined()
+    #expect(digest == expectedDigest, "Digest should match server challenge and cookie")
 
     try channel.close().wait()
   }
@@ -70,7 +208,8 @@ struct DBusAuthenticationHandlerTests {
     // Activate the channel (sends initial NUL byte + AUTH command)
     channel.pipeline.fireChannelActive()
 
-    // Consume the outbound message
+    // Consume the outbound messages
+    _ = try channel.readOutbound(as: ByteBuffer.self)
     _ = try channel.readOutbound(as: ByteBuffer.self)
 
     // Send OK response from server
@@ -115,46 +254,77 @@ struct DBusAuthenticationHandlerTests {
     try channel.close().wait()
   }
 
-  @Test func rejectedAuthentication() throws {
+  @Test func unixFdNegotiationCycle() throws {
     let channel = EmbeddedChannel()
+    let logger = Logger(label: "dbus.test.auth")
+    let handlers: [ChannelHandler] = [
+      ByteToMessageHandler(LineBasedFrameDecoder()),
+      DBusAuthenticationHandler(auth: .anonymous, enableUnixFDs: true, logger: logger),
+      ByteToMessageHandler(DBusMessageDecoder(logger: logger)),
+      MessageToByteHandler(DBusMessageEncoder(logger: logger)),
+    ]
+    try channel.pipeline.syncOperations.addHandlers(handlers)
 
-    // Add error handler to verify the correct error is thrown
-    var capturedError: Error?
-    let errorHandler = ErrorCollector { error in
-      capturedError = error
+    channel.pipeline.fireChannelActive()
+
+    _ = try channel.readOutbound(as: ByteBuffer.self)
+    _ = try channel.readOutbound(as: ByteBuffer.self)
+
+    var okBuffer = channel.allocator.buffer(capacity: 32)
+    okBuffer.writeString("OK 1234abcd5678ef90\r\n")
+    try channel.writeInbound(okBuffer)
+
+    if let negotiateData = try channel.readOutbound(as: ByteBuffer.self) {
+      let command = String(buffer: negotiateData)
+      #expect(command == "NEGOTIATE_UNIX_FD\r\n", "Expected NEGOTIATE_UNIX_FD command")
+    } else {
+      #expect(Bool(false), "No NEGOTIATE_UNIX_FD command was sent")
     }
-    try channel.pipeline.addHandler(errorHandler).wait()
+
+    var agreeBuffer = channel.allocator.buffer(capacity: 20)
+    agreeBuffer.writeString("AGREE_UNIX_FD\r\n")
+    try channel.writeInbound(agreeBuffer)
+
+    if let beginData = try channel.readOutbound(as: ByteBuffer.self) {
+      let command = String(buffer: beginData)
+      #expect(command == "BEGIN\r\n", "Expected BEGIN command after UNIX_FD negotiation")
+    } else {
+      #expect(Bool(false), "No BEGIN command was sent")
+    }
+
+    try channel.close().wait()
+  }
+
+  @Test func rejectedAuthenticationFallsBack() throws {
+    let channel = EmbeddedChannel()
 
     try DBusClient.addToPipeline(channel.pipeline, auth: .anonymous)
 
     // Activate the channel
     channel.pipeline.fireChannelActive()
 
-    // Consume the outbound message
+    // Consume the outbound messages
+    _ = try channel.readOutbound(as: ByteBuffer.self)
     _ = try channel.readOutbound(as: ByteBuffer.self)
 
     // Send REJECTED response
     var rejectedBuffer = channel.allocator.buffer(capacity: 32)
     rejectedBuffer.writeString("REJECTED EXTERNAL DBUS_COOKIE_SHA1\r\n")
 
-    // This will throw an error in the handler
-    do {
-      try channel.writeInbound(rejectedBuffer)
-    } catch {
-      // Error might be thrown here too
-      capturedError = error
+    try channel.writeInbound(rejectedBuffer)
+
+    // Expect fallback to another mechanism
+    if let fallbackData = try channel.readOutbound(as: ByteBuffer.self) {
+      let command = String(buffer: fallbackData)
+      #expect(command.starts(with: "AUTH DBUS_COOKIE_SHA1"), "Expected COOKIE_SHA1 fallback")
+    } else {
+      #expect(Bool(false), "No fallback AUTH was sent")
     }
 
-    // Verify the correct error was caught
-    #expect(capturedError != nil, "An error should be thrown for REJECTED response")
-    if let dbusError = capturedError as? DBusAuthenticationError {
-      #expect(dbusError == .invalidAuthCommand, "Should receive invalidAuthCommand error")
-    }
-
-    // No BEGIN command should be sent
+    // No BEGIN command should be sent yet
     #expect(
       try channel.readOutbound(as: ByteBuffer.self) == nil,
-      "No command should be sent after REJECTED")
+      "No BEGIN should be sent after fallback AUTH")
 
     try channel.close().wait()
   }
@@ -177,7 +347,8 @@ struct DBusAuthenticationHandlerTests {
     // Activate the channel
     channel.pipeline.fireChannelActive()
 
-    // Consume the outbound message
+    // Consume the outbound messages
+    _ = try channel.readOutbound(as: ByteBuffer.self)
     _ = try channel.readOutbound(as: ByteBuffer.self)
 
     // Trigger writability change before authentication
@@ -211,7 +382,8 @@ struct DBusAuthenticationHandlerTests {
     // Activate the channel
     channel.pipeline.fireChannelActive()
 
-    // Consume the outbound message
+    // Consume the outbound messages
+    _ = try channel.readOutbound(as: ByteBuffer.self)
     _ = try channel.readOutbound(as: ByteBuffer.self)
 
     // Send first part of OK response
@@ -243,21 +415,6 @@ struct DBusAuthenticationHandlerTests {
 }
 
 // Helper handlers for testing
-private final class ErrorCollector: ChannelInboundHandler, @unchecked Sendable {
-  typealias InboundIn = ByteBuffer
-
-  private let callback: (Error) -> Void
-
-  init(callback: @escaping (Error) -> Void) {
-    self.callback = callback
-  }
-
-  func errorCaught(context: ChannelHandlerContext, error: Error) {
-    callback(error)
-    context.fireErrorCaught(error)
-  }
-}
-
 private final class WritabilityTracker: ChannelInboundHandler, @unchecked Sendable {
   typealias InboundIn = ByteBuffer
 

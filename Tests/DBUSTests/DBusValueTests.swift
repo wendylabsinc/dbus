@@ -229,6 +229,31 @@ struct DBusValueTests {
     try testRoundTrip(mixedAlignments, mixedAlignments.dbusTypeSignature)
   }
 
+  @Test func dictionaryAlignmentInStruct() throws {
+    let dict = DBusValue.dictionary([
+      .string("k"): .string("v")
+    ])
+
+    var dictBuffer = ByteBuffer()
+    dict.write(to: &dictBuffer, byteOrder: .little)
+    var dictBufferCopy = dictBuffer
+    guard let expectedLength: UInt32 = dictBufferCopy.readInteger(endianness: .little) else {
+      #expect(Bool(false), "Failed to read dictionary length")
+      return
+    }
+
+    var structBuffer = ByteBuffer()
+    DBusValue.structure([.byte(1), dict]).write(to: &structBuffer, byteOrder: .little)
+    var structBufferCopy = structBuffer
+    structBufferCopy.moveReaderIndex(to: 4)
+    guard let lengthAtOffset: UInt32 = structBufferCopy.readInteger(endianness: .little) else {
+      #expect(Bool(false), "Failed to read dictionary length at offset")
+      return
+    }
+
+    #expect(lengthAtOffset == expectedLength)
+  }
+
   // MARK: - Endianness Tests
 
   @Test func littleEndianSerialization() throws {
@@ -594,15 +619,30 @@ struct DBusValueTests {
 
     // Just check that we have a dictionary in the first parameter that contains the expected connection info
     // Instead of checking for exact equality, which can fail due to implementation details
-    if case .array(let dictionaries) = decodedMessage.body[0],
-      let connectionDict = dictionaries.first,
-      case .dictionary(let entries) = connectionDict,
-      let connectionEntry = entries.first(where: {
-        if case .string(let key) = $0.key, key == "connection" {
-          return true
-        }
-        return false
-      }),
+    let entries: [DBusValue: DBusValue]
+    switch decodedMessage.body[0] {
+    case .dictionary(let dict):
+      entries = dict
+    case .array(let dictionaries):
+      guard
+        let connectionDict = dictionaries.first,
+        case .dictionary(let dict) = connectionDict
+      else {
+        #expect(Bool(false), "Should have valid connection dictionary with settings")
+        return
+      }
+      entries = dict
+    default:
+      #expect(Bool(false), "Should have valid connection dictionary with settings")
+      return
+    }
+
+    if let connectionEntry = entries.first(where: {
+      if case .string(let key) = $0.key, key == "connection" {
+        return true
+      }
+      return false
+    }),
       case .variant(let variant) = connectionEntry.value
     {
 

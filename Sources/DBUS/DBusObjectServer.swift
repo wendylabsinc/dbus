@@ -521,6 +521,7 @@ public actor DBusObjectServer: Sendable {
   // MARK: Error helpers
 
   private func sendError(_ error: DBusServerError, replyingTo message: DBusMessage) async {
+    guard !message.flags.contains(.noReplyExpected) else { return }
     do {
       _ = try await connection.send(
         DBusRequest.createError(
@@ -546,7 +547,7 @@ public enum DBusServerError: Error, Sendable {
     case .unknownObject: return "org.freedesktop.DBus.Error.UnknownObject"
     case .unknownInterface: return "org.freedesktop.DBus.Error.UnknownInterface"
     case .unknownMethod: return "org.freedesktop.DBus.Error.UnknownMethod"
-    case .unknownProperty: return "org.freedesktop.DBus.Error.InvalidArgs"
+    case .unknownProperty: return "org.freedesktop.DBus.Error.UnknownProperty"
     case .propertyReadOnly: return "org.freedesktop.DBus.Error.PropertyReadOnly"
     case .invalidArgs: return "org.freedesktop.DBus.Error.InvalidArgs"
     case .failed: return "org.freedesktop.DBus.Error.Failed"

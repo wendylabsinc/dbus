@@ -80,16 +80,7 @@ public indirect enum DBusValue: Hashable, Sendable {
     case "b", "i", "u", "s", "o", "g", "h": return 4
     case "x", "t", "d": return 8  // INT64, UINT64, DOUBLE
     case "a":
-      guard typeSignature.count >= 2 else {
-        return 1  // Invalid
-      }
-
-      let secondIndex = typeSignature.index(after: typeSignature.startIndex)
-      if typeSignature[secondIndex] == "{" {
-        return 8  // DICT_ENTRY
-      } else {
-        return 4  // ARRAY
-      }
+      return 4  // ARRAY (element alignment handled separately)
     case "(": return 8  // STRUCT
     case "{": return 8  // DICT_ENTRY
     case "v": return 1  // VARIANT (signature is 1, value is aligned as per type)
@@ -157,6 +148,22 @@ public indirect enum DBusValue: Hashable, Sendable {
       // Track the maximum bytes we should read from the array
       let maxArrayBytes = Int(arrayLen)
       let arrayEndPosition = buffer.readerIndex + maxArrayBytes
+      if arrayEndPosition > buffer.writerIndex {
+        throw DBusError.invalidHeader
+      }
+
+      func alignWithinArray(_ alignment: Int) throws {
+        let misalignment = buffer.readerIndex % alignment
+        if misalignment == 0 {
+          return
+        }
+        let padding = alignment - misalignment
+        let newIndex = buffer.readerIndex + padding
+        if newIndex > arrayEndPosition {
+          throw DBusError.invalidHeader
+        }
+        buffer.moveReaderIndex(forwardBy: padding)
+      }
 
       if elementSig.starts(with: "{") {
         // Parse the dictionary entry signatures
@@ -183,7 +190,7 @@ public indirect enum DBusValue: Hashable, Sendable {
 
         // Read dictionary entries until we reach the array end
         while buffer.readerIndex < arrayEndPosition {
-          buffer.alignReader(to: 8)  // Dict entries are aligned to 8 bytes
+          try alignWithinArray(8)  // Dict entries are aligned to 8 bytes
 
           // Ensure we don't read past the array end
           if buffer.readerIndex >= arrayEndPosition {
@@ -218,6 +225,7 @@ public indirect enum DBusValue: Hashable, Sendable {
             break
           }
 
+          try alignWithinArray(Self.alignment(for: elementSig))
           elements.append(
             try DBusValue.parse(from: &buffer, typeSignature: elementSig, byteOrder: byteOrder))
         }
@@ -656,7 +664,7 @@ extension DBusValue {
         f.write(to: &buffer, byteOrder: byteOrder)
       }
     case .dictionary(let dict):
-      buffer.alignWriter(to: 8)
+      buffer.alignWriter(to: 4)
       let start = buffer.writerIndex
       buffer.writeInteger(UInt32(0), endianness: byteOrder)  // Placeholder for length
 

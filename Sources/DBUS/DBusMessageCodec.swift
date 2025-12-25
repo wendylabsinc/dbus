@@ -14,8 +14,8 @@ struct DBusMessageDecoder: ByteToMessageDecoder {
     logger.trace("Decoding message from buffer with \(buffer.readableBytes) bytes")
     let index = buffer.readerIndex
     do {
-      buffer.discardReadBytes()
       let msg = try DBusMessage(from: &buffer)
+      buffer.discardReadBytes()
       logger.trace(
         "Successfully decoded D-Bus message",
         metadata: [
@@ -25,7 +25,7 @@ struct DBusMessageDecoder: ByteToMessageDecoder {
       )
       context.fireChannelRead(self.wrapInboundOut(msg))
       return .continue
-    } catch DBusError.truncatedHeaderFields, DBusError.truncatedBody {
+    } catch DBusError.truncatedHeaderFields, DBusError.truncatedBody, DBusError.earlyEOF {
       // Not enough data yet
       logger.trace("Not enough data for complete message, waiting for more")
       buffer.moveReaderIndex(to: index)
@@ -51,6 +51,7 @@ struct DBusMessageEncoder: MessageToByteEncoder {
   }
 
   func encode(data: DBusMessage, out: inout ByteBuffer) throws {
+    try data.validate(allowUnixFds: false, unixFdsError: .unixFdUnsupported)
     logger.trace(
       "Encoding D-Bus message",
       metadata: [

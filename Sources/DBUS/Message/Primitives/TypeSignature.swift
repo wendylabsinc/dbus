@@ -114,6 +114,7 @@ public struct DBusTypeSignature {
         structDepth -= 1
         return .structure(fields)
       case "{":
+        guard arrayDepth > 0 else { throw Error.dictEntryOutsideArray }
         // Check for dictionary entry completeness
         // We need at least one character for the key type
         guard !isAtEnd else { throw Error.unmatchedBrace }
@@ -155,6 +156,7 @@ public struct DBusTypeSignature {
     case tooDeep
     case emptyStruct
     case invalidDictKey
+    case dictEntryOutsideArray
 
     public var description: String {
       switch self {
@@ -167,6 +169,7 @@ public struct DBusTypeSignature {
       case .tooDeep: return "Container nesting exceeds maximum depth of 32."
       case .emptyStruct: return "Empty structs are not allowed in D-Bus."
       case .invalidDictKey: return "Dictionary entry keys must be basic types."
+      case .dictEntryOutsideArray: return "Dictionary entries must appear inside arrays."
       }
     }
   }
