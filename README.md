@@ -17,6 +17,7 @@ DBUS is a Swift package that provides a pure Swift implementation of the D-Bus p
 - **Pure Swift Implementation**: No C library dependencies, built entirely on SwiftNIO
 - **Modern Swift 6 API**: Full async/await support with Swift concurrency
 - **Complete D-Bus Protocol**: Message parsing, authentication, and type system
+- **Server-Side Export**: Export objects with methods/properties/signals (Introspectable, Properties, ObjectManager) and handle inbound calls
 - **Type-Safe Interface**: Swift types mapped to D-Bus types with compile-time safety
 - **SwiftNIO Foundation**: High-performance networking with proper resource management
 - **Authentication Support**: ANONYMOUS and EXTERNAL authentication methods
@@ -161,6 +162,52 @@ try await DBusClient.withConnection(
 }
 ```
 
+### Exporting Objects (server side)
+
+Use `DBusObjectServer` to expose D-Bus objects, properties, and methods that other peers can call.
+
+```swift
+let server = DBusObjectServer(connection: connection)
+
+var echo = DBusObjectServer.Interface(name: "org.example.Echo")
+echo.methods = [
+  .init(name: "Ping") { _ in [.string("Pong")] }
+]
+echo.properties = [
+  .init(name: "Version", value: .string("1.0.0"))
+]
+
+await server.export(.init(path: "/org/example/Echo", interfaces: [echo]))
+// The server now replies to:
+// - org.freedesktop.DBus.Introspectable.Introspect
+// - org.freedesktop.DBus.Properties.Get/GetAll
+// - org.example.Echo.Ping
+```
+
+### BlueZ advertisement + GATT example
+
+The `ExampleApp` target registers both a LE advertisement and a GATT tree with BlueZ on the system bus:
+
+1. Export objects:
+   - `org.bluez.LEAdvertisement1` at `/com/wendylabs/example/adv0`
+   - `org.bluez.GattApplication1` root with ObjectManager at `/com/wendylabs/example/gatt`
+   - `org.bluez.GattService1`/`GattCharacteristic1`/`GattDescriptor1` child nodes
+2. Call `RegisterAdvertisement` and `RegisterApplication` on `/org/bluez/hci0`.
+
+Run the example (as a user allowed on the system bus):
+```bash
+swift run ExampleApp
+```
+
+Verify in another shell:
+```bash
+bluetoothctl show
+busctl introspect org.bluez /com/wendylabs/example/adv0
+busctl introspect org.bluez /com/wendylabs/example/gatt
+```
+
+BlueZ will call back into the exported objects for `Release`, `ReadValue`, `WriteValue`, `GetManagedObjects`, and property reads. See `Sources/ExampleApp/App.swift` for a minimal, runnable template.
+
 ### Using Logging
 
 DBUS logs to [swift-log](https://github.com/swiftlang/swift-log) to help with debugging and understanding internal operations. You can provide your own logger implementation or use the standard adapters. We'll log to `.debug` and `.trace` levels in compliant with [established standards](https://www.swift.org/documentation/server/guides/libraries/log-levels.html).
@@ -192,12 +239,10 @@ While DBUS provides a solid foundation for D-Bus communication, some features ar
 
 ### **Not Yet Implemented**
 - **Signal Subscription**: No built-in signal filtering and callback registration
-- **Service Registration**: Cannot expose Swift objects as D-Bus services  
-- **Introspection Support**: No XML parsing or automatic proxy generation
 - **Connection Pooling**: Limited to single-use connections
-- **Standard Interfaces**: No built-in support for `org.freedesktop.DBus.Properties`, `org.freedesktop.DBus.Introspectable`, etc.
+- **Automatic Proxy Generation**: No XML parsing or proxy generation for remote introspection
 - **Bus Name Management**: No automatic name reservation or ownership monitoring
-- **Property Interface**: Basic property access only, no caching or change notifications
+- **Property Caching**: No change notifications or caching helpers
 - **High-Level API**: Currently requires low-level message construction
 
 ### **Known Issues**

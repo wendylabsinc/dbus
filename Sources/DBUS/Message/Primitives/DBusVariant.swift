@@ -24,6 +24,20 @@ public struct DBusVariant: Sendable, Hashable {
     self.value = value
   }
 
+  /// Creates a variant with an explicit type signature.
+  ///
+  /// This initializer is useful when you need to send an empty container value but
+  /// still preserve the intended element signature (for example an empty array of
+  /// strings should use the `as` signature instead of defaulting to `ay`).
+  ///
+  /// - Parameters:
+  ///   - signature: The D-Bus type signature that should be advertised for the wrapped value.
+  ///   - value: The value to wrap in the variant.
+  public init(signature: String, value: DBusValue) {
+    self.signature = signature
+    self.value = value
+  }
+
   /// Creates a variant containing the given D-Bus value.
   ///
   /// The signature is automatically derived from the value's type.

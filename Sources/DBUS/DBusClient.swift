@@ -46,6 +46,7 @@ public actor DBusClient: Sendable {
     public private(set) var send: Send
     let logger: Logger
     private var continuations = [(UInt32, CheckedContinuation<DBusMessage, Error>)]()
+    private var messageHandler: (@Sendable (DBusMessage) async -> Void)?
 
     internal init(send: Send, logger: Logger) {
       self.send = send
@@ -74,6 +75,8 @@ public actor DBusClient: Sendable {
             metadata: [
               "reply-to": "\(String(describing: replyTo))"
             ])
+        } else if let handler = messageHandler {
+          await handler(message)
         }
       }
     }
@@ -98,6 +101,18 @@ public actor DBusClient: Sendable {
       return try await withCheckedThrowingContinuation { continuation in
         continuations.append((requestId, continuation))
       }
+    }
+
+    /// Registers a handler for inbound messages that are not replies to sent requests.
+    ///
+    /// Useful for implementing server-side object export where the process needs to
+    /// respond to incoming method calls.
+    ///
+    /// - Parameter handler: Async closure invoked for each unhandled inbound message.
+    public func setMessageHandler(
+      _ handler: @escaping @Sendable (DBusMessage) async -> Void
+    ) async {
+      messageHandler = handler
     }
   }
 
