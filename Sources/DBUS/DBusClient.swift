@@ -296,7 +296,6 @@ public actor DBusClient: Sendable {
   /// - Parameters:
   ///   - address: The socket address of the D-Bus service to connect to.
   ///   - auth: The authentication type to use for the connection (e.g., `.anonymous` or `.external(userID:)`).
-  ///   - enableUnixFDs: UNIX_FD negotiation is unsupported by the NIO client; use ``DBusUnixFDClient`` instead.
   ///   - logger: The logger to use for D-Bus operations. Defaults to a logger with label "dbus.client".
   ///   - handler: An async closure that receives ``Replies`` and ``Send`` instances for communicating with the bus.
   ///             The handler should return a value of type `R`.
@@ -321,17 +320,12 @@ public actor DBusClient: Sendable {
   public static func withConnection<R: Sendable>(
     to address: SocketAddress,
     auth: AuthType,
-    enableUnixFDs: Bool = false,
     logger: Logger = Logger(label: "dbus.client"),
     _ handler: @Sendable @escaping (Connection) async throws -> R
   ) async throws -> R {
-    guard !enableUnixFDs else {
-      throw DBusError.unixFdUnsupported
-    }
     return try await withConnectionPair(
       to: address,
       auth: auth,
-      enableUnixFDs: enableUnixFDs,
       logger: logger
     ) { replies, send in
       let connection = Connection(send: send, logger: logger)
@@ -366,7 +360,6 @@ public actor DBusClient: Sendable {
   /// - Parameters:
   ///   - address: The socket address of the D-Bus service to connect to.
   ///   - auth: The authentication type to use for the connection (e.g., `.anonymous` or `.external(userID:)`).
-  ///   - enableUnixFDs: UNIX_FD negotiation is unsupported by the NIO client; use ``DBusUnixFDClient`` instead.
   ///   - logger: The logger to use for D-Bus operations. Defaults to a logger with label "dbus.client".
   ///   - handler: An async closure that receives ``Replies`` and ``Send`` instances for communicating with the bus.
   ///             The handler should return a value of type `R`.
@@ -391,12 +384,12 @@ public actor DBusClient: Sendable {
   public static func withConnectionPair<R: Sendable>(
     to address: SocketAddress,
     auth: AuthType,
-    enableUnixFDs: Bool = false,
     logger: Logger = Logger(label: "dbus.client"),
     _ handler: @Sendable @escaping (inout Replies, inout Send) async throws -> R
   ) async throws -> R {
-    guard !enableUnixFDs else {
-      throw DBusError.unixFdUnsupported
+    let enableUnixFDs = switch address {
+      case .unixDomainSocket: true
+      case .v4, .v6: false
     }
     let bootstrap = ClientBootstrap(group: MultiThreadedEventLoopGroup.singleton)
       .channelInitializer { channel in
@@ -435,17 +428,12 @@ public actor DBusClient: Sendable {
   public static func withConnection<R: Sendable>(
     to address: DBusAddress,
     auth: AuthType,
-    enableUnixFDs: Bool = false,
     logger: Logger = Logger(label: "dbus.client"),
     _ handler: @Sendable @escaping (Connection) async throws -> R
   ) async throws -> R {
-    guard !enableUnixFDs else {
-      throw DBusError.unixFdUnsupported
-    }
     return try await withConnectionPair(
       to: address,
       auth: auth,
-      enableUnixFDs: enableUnixFDs,
       logger: logger
     ) { replies, send in
       let connection = Connection(send: send, logger: logger)
@@ -475,17 +463,17 @@ public actor DBusClient: Sendable {
   public static func withConnectionPair<R: Sendable>(
     to address: DBusAddress,
     auth: AuthType,
-    enableUnixFDs: Bool = false,
     logger: Logger = Logger(label: "dbus.client"),
     _ handler: @Sendable @escaping (inout Replies, inout Send) async throws -> R
   ) async throws -> R {
-    guard !enableUnixFDs else {
-      throw DBusError.unixFdUnsupported
-    }
     let initialBytes = try initialBytes(for: address)
     let bootstrap = ClientBootstrap(group: MultiThreadedEventLoopGroup.singleton)
       .channelInitializer { channel in
         do {
+          let enableUnixFDs = switch address {
+            case .unix, .unixAbstract: false
+            case .tcp, .nonceTcp: true
+          }
           try DBusClient.addToPipeline(
             channel.pipeline,
             auth: auth,
@@ -522,7 +510,6 @@ public actor DBusClient: Sendable {
   public static func withConnection<R: Sendable>(
     to address: String,
     auth: AuthType,
-    enableUnixFDs: Bool = false,
     logger: Logger = Logger(label: "dbus.client"),
     _ handler: @Sendable @escaping (Connection) async throws -> R
   ) async throws -> R {
@@ -530,7 +517,6 @@ public actor DBusClient: Sendable {
     return try await withConnection(
       to: parsedAddress,
       auth: auth,
-      enableUnixFDs: enableUnixFDs,
       logger: logger,
       handler
     )
@@ -539,7 +525,6 @@ public actor DBusClient: Sendable {
   public static func withConnectionPair<R: Sendable>(
     to address: String,
     auth: AuthType,
-    enableUnixFDs: Bool = false,
     logger: Logger = Logger(label: "dbus.client"),
     _ handler: @Sendable @escaping (inout Replies, inout Send) async throws -> R
   ) async throws -> R {
@@ -547,7 +532,6 @@ public actor DBusClient: Sendable {
     return try await withConnectionPair(
       to: parsedAddress,
       auth: auth,
-      enableUnixFDs: enableUnixFDs,
       logger: logger,
       handler
     )
@@ -558,7 +542,6 @@ public actor DBusClient: Sendable {
   /// This is a convenience wrapper around ``DBusAddress/sessionBusAddress()``.
   public static func withSessionBus<R: Sendable>(
     auth: AuthType,
-    enableUnixFDs: Bool = false,
     logger: Logger = Logger(label: "dbus.client"),
     _ handler: @Sendable @escaping (Connection) async throws -> R
   ) async throws -> R {
@@ -566,7 +549,6 @@ public actor DBusClient: Sendable {
     return try await withConnection(
       to: address,
       auth: auth,
-      enableUnixFDs: enableUnixFDs,
       logger: logger,
       handler
     )
@@ -577,7 +559,6 @@ public actor DBusClient: Sendable {
   /// This is a convenience wrapper around ``DBusAddress/systemBusAddress()``.
   public static func withSystemBus<R: Sendable>(
     auth: AuthType,
-    enableUnixFDs: Bool = false,
     logger: Logger = Logger(label: "dbus.client"),
     _ handler: @Sendable @escaping (Connection) async throws -> R
   ) async throws -> R {
@@ -585,7 +566,6 @@ public actor DBusClient: Sendable {
     return try await withConnection(
       to: address,
       auth: auth,
-      enableUnixFDs: enableUnixFDs,
       logger: logger,
       handler
     )
@@ -596,15 +576,12 @@ public actor DBusClient: Sendable {
     to address: DBusAddress
   ) async throws -> Channel {
     switch address {
-    case .unix:
+    case .unix, .unixAbstract:
       let socket = try address.unixSocketAddress()
       return try await bootstrap.connect(to: socket).get()
-    case .unixAbstract:
-      let socket = try address.unixSocketAddress()
-      return try await bootstrap.connect(to: socket).get()
-    case .tcp(let host, let port, let family):
-      return try await connectTcp(bootstrap, host: host, port: port, family: family)
-    case .nonceTcp(let host, let port, let family, _):
+    case 
+      .tcp(let host, let port, let family),
+      .nonceTcp(let host, let port, let family, _):
       return try await connectTcp(bootstrap, host: host, port: port, family: family)
     }
   }
@@ -673,13 +650,10 @@ public actor DBusClient: Sendable {
   static func addToPipeline(
     _ pipeline: ChannelPipeline,
     auth: AuthType,
-    enableUnixFDs: Bool = false,
+    enableUnixFDs: Bool,
     initialBytes: [UInt8] = [],
     logger: Logger = Logger(label: "dbus.client")
   ) throws {
-    guard !enableUnixFDs else {
-      throw DBusError.unixFdUnsupported
-    }
     let handlers: [any ChannelHandler] = [
       ByteToMessageHandler(LineBasedFrameDecoder()),
       DBusAuthenticationHandler(

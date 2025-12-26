@@ -276,7 +276,6 @@ While DBUS provides a solid foundation for D-Bus communication, some features ar
 - **Bus Name Management**: No automatic name reservation or ownership monitoring
 - **Property Caching**: No change notifications or caching helpers
 - **High-Level API**: Currently requires low-level message construction
-- **UNIX_FD Support (NIO Client)**: Use `DBusUnixFDClient` when passing file descriptors
 
 ### **Known Issues**
 - Empty arrays default to byte array type signature regardless of intended type

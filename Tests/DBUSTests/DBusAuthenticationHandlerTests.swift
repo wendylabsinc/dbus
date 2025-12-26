@@ -25,7 +25,7 @@ struct DBusAuthenticationHandlerTests {
   @Test func initialNulByteSending() throws {
     // Set up an embedded channel using DBusClient's configuration
     let channel = EmbeddedChannel()
-    try DBusClient.addToPipeline(channel.pipeline, auth: .anonymous)
+    try DBusClient.addToPipeline(channel.pipeline, auth: .anonymous, enableUnixFDs: false)
 
     // Activate the channel
     channel.pipeline.fireChannelActive()
@@ -52,7 +52,7 @@ struct DBusAuthenticationHandlerTests {
   @Test func initialBytesAreSentBeforeNul() throws {
     let channel = EmbeddedChannel()
     let initialBytes: [UInt8] = [0x12, 0x34, 0x56]
-    try DBusClient.addToPipeline(channel.pipeline, auth: .anonymous, initialBytes: initialBytes)
+    try DBusClient.addToPipeline(channel.pipeline, auth: .anonymous, enableUnixFDs: false, initialBytes: initialBytes)
 
     channel.pipeline.fireChannelActive()
 
@@ -86,7 +86,7 @@ struct DBusAuthenticationHandlerTests {
 
     let channel = EmbeddedChannel()
     try DBusClient.addToPipeline(
-      channel.pipeline, auth: .external(userID: userId))
+      channel.pipeline, auth: .external(userID: userId), enableUnixFDs: false)
 
     // Activate the channel
     channel.pipeline.fireChannelActive()
@@ -154,7 +154,7 @@ struct DBusAuthenticationHandlerTests {
     }
 
     let channel = EmbeddedChannel()
-    try DBusClient.addToPipeline(channel.pipeline, auth: .external(userID: userId))
+    try DBusClient.addToPipeline(channel.pipeline, auth: .external(userID: userId), enableUnixFDs: false)
     channel.pipeline.fireChannelActive()
 
     _ = try channel.readOutbound(as: ByteBuffer.self)
@@ -207,7 +207,7 @@ struct DBusAuthenticationHandlerTests {
 
   @Test func completeAuthenticationCycle() throws {
     let channel = EmbeddedChannel()
-    try DBusClient.addToPipeline(channel.pipeline, auth: .anonymous)
+    try DBusClient.addToPipeline(channel.pipeline, auth: .anonymous, enableUnixFDs: false)
 
     // Activate the channel (sends initial NUL byte + AUTH command)
     channel.pipeline.fireChannelActive()
@@ -302,7 +302,7 @@ struct DBusAuthenticationHandlerTests {
   @Test func rejectedAuthenticationFallsBack() throws {
     let channel = EmbeddedChannel()
 
-    try DBusClient.addToPipeline(channel.pipeline, auth: .anonymous)
+    try DBusClient.addToPipeline(channel.pipeline, auth: .anonymous, enableUnixFDs: false)
 
     // Activate the channel
     channel.pipeline.fireChannelActive()
@@ -346,7 +346,7 @@ struct DBusAuthenticationHandlerTests {
     )
     try channel.pipeline.addHandler(writabilityTracker).wait()
 
-    try DBusClient.addToPipeline(channel.pipeline, auth: .anonymous)
+    try DBusClient.addToPipeline(channel.pipeline, auth: .anonymous, enableUnixFDs: false)
 
     // Activate the channel
     channel.pipeline.fireChannelActive()
@@ -381,7 +381,7 @@ struct DBusAuthenticationHandlerTests {
 
   @Test func partialDataHandling() throws {
     let channel = EmbeddedChannel()
-    try DBusClient.addToPipeline(channel.pipeline, auth: .anonymous)
+    try DBusClient.addToPipeline(channel.pipeline, auth: .anonymous, enableUnixFDs: false)
 
     // Activate the channel
     channel.pipeline.fireChannelActive()
