@@ -34,9 +34,8 @@ struct MessageTests {
     }
 
     while writeBuffer.readableBytes > 0 {
-      let message = try DBusMessage(from: &writeBuffer)
+      _ = try DBusMessage(from: &writeBuffer)
       writeBuffer.discardReadBytes()
-      print(message)
     }
   }
     

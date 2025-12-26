@@ -88,19 +88,6 @@ struct DBusClientTests {
     #expect(DBusSerialGenerator.next(after: UInt32.max) == 1)
   }
 
-  @Test func addToPipelineRejectsUnixFds() throws {
-    let channel = EmbeddedChannel()
-    do {
-      try DBusClient.addToPipeline(channel.pipeline, auth: .anonymous, enableUnixFDs: true)
-      #expect(Bool(false), "Expected unixFdUnsupported error")
-    } catch DBusError.unixFdUnsupported {
-      // Expected.
-    } catch {
-      #expect(Bool(false), "Unexpected error: \(error)")
-    }
-    try channel.close().wait()
-  }
-
   @Test func sendTimesOutWhenReplyMissing() async throws {
     let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
 

@@ -3,6 +3,9 @@ import PackageDescription
 
 let package = Package(
   name: "DBUS",
+  platforms: [
+    .macOS(.v10_15),
+  ],
   products: [
     .library(
       name: "DBUS",
