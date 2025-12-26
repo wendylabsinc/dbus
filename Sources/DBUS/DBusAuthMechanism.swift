@@ -8,6 +8,8 @@ import Crypto
 
 #if canImport(Glibc)
   import Glibc
+#elseif canImport(Musl)
+  import Musl
 #endif
 
 internal enum DBusAuthMechanism: Equatable {
@@ -209,7 +211,7 @@ private enum DBusAuthUser {
   }
 
   private static func resolveUserName(userID: String?) -> String? {
-    #if canImport(Glibc)
+    #if canImport(Glibc) || canImport(Musl)
       if let userID, let uid = UInt32(userID) {
         if let entry = getpwuid(uid_t(uid)) {
           return String(cString: entry.pointee.pw_name)
@@ -225,7 +227,7 @@ private enum DBusAuthUser {
       return env
     }
 
-    #if canImport(Glibc)
+    #if canImport(Glibc) || canImport(Musl)
       let uid = getuid()
       if let entry = getpwuid(uid) {
         return String(cString: entry.pointee.pw_name)
@@ -240,7 +242,7 @@ private enum DBusAuthUser {
       return home
     }
 
-    #if canImport(Glibc)
+    #if canImport(Glibc) || canImport(Musl)
       if let entry = getpwnam(userName) {
         return String(cString: entry.pointee.pw_dir)
       }

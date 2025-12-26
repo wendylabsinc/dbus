@@ -1,5 +1,11 @@
+#if canImport(Glibc) || canImport(Musl)
 #if canImport(Glibc)
 import Glibc
+typealias SystemLibC = Glibc
+#elseif canImport(Musl)
+import Musl
+typealias SystemLibC = Musl
+#endif
 import NIOCore
 import Testing
 
@@ -50,17 +56,17 @@ struct UnixFDSocketTests {
 
     let payload: [UInt8] = [72, 73]
     _ = payload.withUnsafeBytes { rawBuffer in
-      Glibc.write(writeFd, rawBuffer.baseAddress, payload.count)
+      SystemLibC.write(writeFd, rawBuffer.baseAddress, payload.count)
     }
 
     var readBuffer = [UInt8](repeating: 0, count: payload.count)
-    let readCount = Glibc.read(receivedFd, &readBuffer, readBuffer.count)
+    let readCount = SystemLibC.read(receivedFd, &readBuffer, readBuffer.count)
     #expect(readCount == payload.count)
     #expect(readBuffer == payload)
 
-    _ = Glibc.close(receivedFd)
-    _ = Glibc.close(readFd)
-    _ = Glibc.close(writeFd)
+    _ = SystemLibC.close(receivedFd)
+    _ = SystemLibC.close(readFd)
+    _ = SystemLibC.close(writeFd)
     sender.close()
     receiver.close()
   }
