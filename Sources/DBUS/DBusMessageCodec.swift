@@ -11,16 +11,19 @@ struct DBusMessageDecoder: ByteToMessageDecoder {
   }
 
   func decode(context: ChannelHandlerContext, buffer: inout ByteBuffer) throws -> DecodingState {
-    logger.trace("Decoding message from buffer with \(buffer.readableBytes) bytes")
+    logger.debug("DBusMessageDecoder: Decoding message from buffer with \(buffer.readableBytes) bytes")
     let index = buffer.readerIndex
     do {
       let msg = try DBusMessage(from: &buffer)
       buffer.discardReadBytes()
-      logger.trace(
-        "Successfully decoded D-Bus message",
+      logger.debug(
+        "DBusMessageDecoder: Successfully decoded D-Bus message",
         metadata: [
           "type": "\(msg.messageType)",
           "serial": "\(msg.serial)",
+          "path": "\(msg.path ?? "nil")",
+          "interface": "\(msg.interface ?? "nil")",
+          "member": "\(msg.member ?? "nil")"
         ]
       )
       context.fireChannelRead(self.wrapInboundOut(msg))
@@ -31,8 +34,8 @@ struct DBusMessageDecoder: ByteToMessageDecoder {
       buffer.moveReaderIndex(to: index)
       return .needMoreData
     } catch {
-      logger.debug(
-        "Failed to decode D-Bus message",
+      logger.warning(
+        "DBusMessageDecoder: Failed to decode D-Bus message",
         metadata: [
           "error": "\(error)"
         ])

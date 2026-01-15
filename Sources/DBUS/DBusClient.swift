@@ -66,15 +66,22 @@ public actor DBusClient: Sendable {
     }
 
     internal func run(replies: inout Replies) async throws {
+      logger.debug("Connection.run() starting message loop")
       while let message = try await replies.next() {
-        logger.trace(
-          "Received message from DBUS",
+        logger.debug(
+          "Connection.run() received message from D-Bus",
           metadata: [
-            "replyTo": "\(String(describing: message.replyTo))"
+            "messageType": "\(message.messageType)",
+            "serial": "\(message.serial)",
+            "replyTo": "\(String(describing: message.replyTo))",
+            "path": "\(message.path ?? "nil")",
+            "interface": "\(message.interface ?? "nil")",
+            "member": "\(message.member ?? "nil")"
           ])
         if let replyTo = message.replyTo,
           let continuation = continuations.removeValue(forKey: replyTo)
         {
+          logger.trace("Dispatching reply to waiting continuation", metadata: ["replyTo": "\(replyTo)"])
           continuation.yield(message)
           continuation.finish()
         } else if let replyTo = message.replyTo {
@@ -84,9 +91,18 @@ public actor DBusClient: Sendable {
               "reply-to": "\(String(describing: replyTo))"
             ])
         } else if let handler = messageHandler {
+          logger.debug("Dispatching message to handler (no replyTo)", metadata: ["messageType": "\(message.messageType)"])
           await handler(message)
+          logger.trace("Handler completed for message", metadata: ["serial": "\(message.serial)"])
+        } else {
+          logger.warning("No handler set for message without replyTo", metadata: [
+            "messageType": "\(message.messageType)",
+            "path": "\(message.path ?? "nil")",
+            "member": "\(message.member ?? "nil")"
+          ])
         }
       }
+      logger.debug("Connection.run() message loop exited (replies.next() returned nil)")
     }
 
     public func send(_ request: DBusRequest) async throws -> DBusMessage? {
@@ -135,11 +151,11 @@ public actor DBusClient: Sendable {
         throw error
       }
 
-      let iterator = replyStream.makeAsyncIterator()
+      let iterator = ReplyIteratorBox(iterator: replyStream.makeAsyncIterator())
       do {
         let reply = try await Self.awaitReply(
           timeoutNanoseconds: timeoutNanoseconds,
-          iterator: ReplyIteratorBox(iterator: iterator)
+          iterator: iterator
         )
         return reply
       } catch {
@@ -160,8 +176,16 @@ public actor DBusClient: Sendable {
       messageHandler = handler
     }
 
-    private struct ReplyIteratorBox: @unchecked Sendable {
-      let iterator: AsyncThrowingStream<DBusMessage, Error>.AsyncIterator
+    private final class ReplyIteratorBox: @unchecked Sendable {
+      private var iterator: AsyncThrowingStream<DBusMessage, Error>.AsyncIterator
+
+      init(iterator: AsyncThrowingStream<DBusMessage, Error>.AsyncIterator) {
+        self.iterator = iterator
+      }
+
+      func next() async throws -> DBusMessage? {
+        try await iterator.next()
+      }
     }
 
     private static func awaitReply(
@@ -170,16 +194,14 @@ public actor DBusClient: Sendable {
     ) async throws -> DBusMessage {
       if let timeoutNanoseconds {
         let reply = try await withTimeout(timeoutNanoseconds) {
-          var localIterator = iterator.iterator
-          return try await localIterator.next()
+          try await iterator.next()
         }
         guard let reply else {
           throw DBusError.missingReply
         }
         return reply
       }
-      var localIterator = iterator.iterator
-      guard let reply = try await localIterator.next() else {
+      guard let reply = try await iterator.next() else {
         throw DBusError.missingReply
       }
       return reply
@@ -190,6 +212,7 @@ public actor DBusClient: Sendable {
       operation: @Sendable @escaping () async throws -> T
     ) async throws -> T {
       try await withThrowingTaskGroup(of: T.self) { group in
+        defer { group.cancelAll() }
         group.addTask {
           try await operation()
         }
@@ -197,9 +220,7 @@ public actor DBusClient: Sendable {
           try await Task.sleep(nanoseconds: nanoseconds)
           throw DBusError.timeout
         }
-        let result = try await group.next()
-        group.cancelAll()
-        guard let result else {
+        guard let result = try await group.next() else {
           throw DBusError.timeout
         }
         return result

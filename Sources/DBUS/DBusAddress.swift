@@ -100,7 +100,7 @@ public enum DBusAddress: Sendable, Equatable {
     case .unix(let path):
       return try SocketAddress(unixDomainSocketPath: path)
     case .unixAbstract(let name):
-      #if canImport(Glibc)
+      #if os(Linux)
         return try SocketAddress(unixDomainSocketPath: "\0" + name)
       #else
         throw DBusAddressError.invalidEntry("unix abstract addresses are not supported")
@@ -125,7 +125,7 @@ public enum DBusAddress: Sendable, Equatable {
         return .unix(path: path)
       }
       if let abstract = values["abstract"] {
-        #if canImport(Glibc)
+        #if os(Linux)
           return .unixAbstract(name: abstract)
         #else
           throw DBusAddressError.invalidEntry(String(entry))

@@ -281,6 +281,7 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
         }
       case .authenticated:
         if buffer.readableBytes > 0 {
+          logger.debug("DBusAuthenticationHandler forwarding \(buffer.readableBytes) bytes to decoder")
           let pass = buffer.readSlice(length: buffer.readableBytes)!
           buffer.discardReadBytes()
           context.fireChannelRead(self.wrapInboundOut(pass))
@@ -320,17 +321,26 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
       let handler = try context.pipeline.syncOperations.handler(
         type: ByteToMessageHandler<LineBasedFrameDecoder>.self)
       _ = context.pipeline.syncOperations.removeHandler(handler)
+      logger.debug("Removed LineBasedFrameDecoder from pipeline")
 
       for buffer in self.writeBuffer {
+        logger.trace("Flushing buffered write", metadata: ["bytes": "\(buffer.readableBytes)"])
         context.writeAndFlush(self.wrapOutboundOut(buffer), promise: nil)
       }
       self.writeBuffer.removeAll(keepingCapacity: true)
       self.state = .authenticated
-      logger.debug("D-Bus authentication completed successfully")
+      logger.info("D-Bus authentication completed successfully - now in message mode")
+
+      // Check remaining buffered data
+      if buffer.readableBytes > 0 {
+        logger.debug("Processing \(buffer.readableBytes) buffered bytes after auth completion")
+      }
+
       context.fireChannelActive()
       context.fireChannelWritabilityChanged()
+      logger.debug("Fired channelActive and channelWritabilityChanged events")
     } catch {
-      logger.debug(
+      logger.warning(
         "Failed to complete authentication setup",
         metadata: [
           "error": "\(error)"

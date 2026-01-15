@@ -17,6 +17,8 @@ import Testing
   import Darwin
 #elseif canImport(Glibc)
   import Glibc
+#elseif canImport(Musl)
+  import Musl
 #endif
 
 @Suite
@@ -139,7 +141,7 @@ struct DBusAuthenticationHandlerTests {
       }
     }
 
-    #if canImport(Glibc)
+    #if canImport(Glibc) || canImport(Musl)
       let userId = String(getuid())
     #else
       let userId = "0"
