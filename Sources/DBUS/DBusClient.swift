@@ -76,12 +76,13 @@ public actor DBusClient: Sendable {
             "replyTo": "\(String(describing: message.replyTo))",
             "path": "\(message.path ?? "nil")",
             "interface": "\(message.interface ?? "nil")",
-            "member": "\(message.member ?? "nil")"
+            "member": "\(message.member ?? "nil")",
           ])
         if let replyTo = message.replyTo,
           let continuation = continuations.removeValue(forKey: replyTo)
         {
-          logger.trace("Dispatching reply to waiting continuation", metadata: ["replyTo": "\(replyTo)"])
+          logger.trace(
+            "Dispatching reply to waiting continuation", metadata: ["replyTo": "\(replyTo)"])
           continuation.yield(message)
           continuation.finish()
         } else if let replyTo = message.replyTo {
@@ -91,15 +92,19 @@ public actor DBusClient: Sendable {
               "reply-to": "\(String(describing: replyTo))"
             ])
         } else if let handler = messageHandler {
-          logger.debug("Dispatching message to handler (no replyTo)", metadata: ["messageType": "\(message.messageType)"])
+          logger.debug(
+            "Dispatching message to handler (no replyTo)",
+            metadata: ["messageType": "\(message.messageType)"])
           await handler(message)
           logger.trace("Handler completed for message", metadata: ["serial": "\(message.serial)"])
         } else {
-          logger.warning("No handler set for message without replyTo", metadata: [
-            "messageType": "\(message.messageType)",
-            "path": "\(message.path ?? "nil")",
-            "member": "\(message.member ?? "nil")"
-          ])
+          logger.warning(
+            "No handler set for message without replyTo",
+            metadata: [
+              "messageType": "\(message.messageType)",
+              "path": "\(message.path ?? "nil")",
+              "member": "\(message.member ?? "nil")",
+            ])
         }
       }
       logger.debug("Connection.run() message loop exited (replies.next() returned nil)")

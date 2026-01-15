@@ -281,7 +281,8 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
         }
       case .authenticated:
         if buffer.readableBytes > 0 {
-          logger.debug("DBusAuthenticationHandler forwarding \(buffer.readableBytes) bytes to decoder")
+          logger.debug(
+            "DBusAuthenticationHandler forwarding \(buffer.readableBytes) bytes to decoder")
           let pass = buffer.readSlice(length: buffer.readableBytes)!
           buffer.discardReadBytes()
           context.fireChannelRead(self.wrapInboundOut(pass))

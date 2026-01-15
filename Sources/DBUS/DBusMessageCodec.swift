@@ -11,7 +11,8 @@ struct DBusMessageDecoder: ByteToMessageDecoder {
   }
 
   func decode(context: ChannelHandlerContext, buffer: inout ByteBuffer) throws -> DecodingState {
-    logger.debug("DBusMessageDecoder: Decoding message from buffer with \(buffer.readableBytes) bytes")
+    logger.debug(
+      "DBusMessageDecoder: Decoding message from buffer with \(buffer.readableBytes) bytes")
     let index = buffer.readerIndex
     do {
       let msg = try DBusMessage(from: &buffer)
@@ -23,7 +24,7 @@ struct DBusMessageDecoder: ByteToMessageDecoder {
           "serial": "\(msg.serial)",
           "path": "\(msg.path ?? "nil")",
           "interface": "\(msg.interface ?? "nil")",
-          "member": "\(msg.member ?? "nil")"
+          "member": "\(msg.member ?? "nil")",
         ]
       )
       context.fireChannelRead(self.wrapInboundOut(msg))
