@@ -456,6 +456,8 @@ public struct DBusMessage: Sendable {
     case .array(let elementType):
       let byteLength = try buffer.requireInteger(endianness: byteOrder) as UInt32
       if byteLength == 0 {
+        // Consume alignment padding even for empty arrays
+        buffer.alignReader(to: elementType.alignment)
         if case .dictEntry = elementType {
           return .dictionary([:])
         }
