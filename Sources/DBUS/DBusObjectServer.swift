@@ -167,19 +167,18 @@ public actor DBusObjectServer: Sendable {
   private let logger: Logger
 
   /// Creates a server bound to a connection.
+  ///
+  /// Note: The caller is responsible for routing messages to this server by calling
+  /// `handle(message:)`. This allows multiple message handlers to coexist on the same
+  /// connection.
   public init(
     connection: any DBusServerConnection,
     logger: Logger = Logger(label: "dbus.server")
   ) {
     self.connection = connection
     self.logger = logger
-
-    Task {
-      await connection.setMessageHandler { [weak self] message in
-        guard let self else { return }
-        await self.handle(message: message)
-      }
-    }
+    // Don't set message handler here - the caller should route messages to us
+    // via handle(message:) to allow multiple handlers on the same connection
   }
 
   /// Export an object path with interfaces.
@@ -194,10 +193,21 @@ public actor DBusObjectServer: Sendable {
 
   // MARK: Dispatch
 
-  private func handle(message: DBusMessage) async {
+  /// Handles an incoming D-Bus message, dispatching to the appropriate handler.
+  /// This method can be called externally to route messages to the object server.
+  public func handle(message: DBusMessage) async {
     guard message.messageType == .methodCall else { return }
     guard let path = message.path else { return }
+
+    logger.debug("DBusObjectServer received method call", metadata: [
+      "path": "\(path)",
+      "interface": "\(message.interface ?? "nil")",
+      "member": "\(message.member ?? "nil")",
+      "hasObject": "\(objects[path] != nil)"
+    ])
+
     guard let object = objects[path] else {
+      logger.debug("Unknown object path, sending error", metadata: ["path": "\(path)"])
       await sendError(.unknownObject, replyingTo: message)
       return
     }
@@ -305,16 +315,21 @@ public actor DBusObjectServer: Sendable {
       }
 
     case "GetAll":
+      logger.debug("Handling GetAll request", metadata: ["path": "\(object.path)"])
       guard let iface = message.body.first?.string else {
+        logger.debug("GetAll: invalid args (no interface)")
         await sendError(.invalidArgs, replyingTo: message)
         return
       }
+      logger.debug("GetAll for interface", metadata: ["interface": "\(iface)"])
       guard let properties = object.interfaces.first(where: { $0.name == iface })?.properties else {
+        logger.debug("GetAll: unknown interface", metadata: ["interface": "\(iface)"])
         await sendError(.unknownInterface, replyingTo: message)
         return
       }
 
       do {
+        logger.debug("GetAll: reading properties", metadata: ["count": "\(properties.count)"])
         var values: [DBusValue: DBusValue] = [:]
         for property in properties {
           let value = try await property.get(
@@ -363,14 +378,20 @@ public actor DBusObjectServer: Sendable {
   // MARK: Introspection
 
   private func handleIntrospect(path: String, message: DBusMessage) async {
+    logger.debug("Handling Introspect request", metadata: ["path": "\(path)"])
     let xml = buildIntrospectionXML(for: path)
     do {
-      guard !message.flags.contains(.noReplyExpected) else { return }
+      guard !message.flags.contains(.noReplyExpected) else {
+        logger.debug("No reply expected for Introspect")
+        return
+      }
+      logger.debug("Sending Introspect response", metadata: ["xmlLength": "\(xml.count)"])
       _ = try await connection.send(
         DBusRequest.createMethodReturn(replyingTo: message, body: [.string(xml)])
       )
+      logger.debug("Introspect response sent successfully")
     } catch {
-      logger.debug("Failed to send introspection", metadata: ["error": "\(error)"])
+      logger.error("Failed to send introspection", metadata: ["error": "\(error)"])
     }
   }
 
