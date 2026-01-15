@@ -1,8 +1,3 @@
-#if canImport(FoundationEssentials)
-import FoundationEssentials
-#elseif canImport(Foundation)
-import Foundation
-#endif
 import Crypto
 import Logging
 import NIO
@@ -10,13 +5,19 @@ import NIOCore
 import NIOExtras
 import Testing
 
-#if canImport(Darwin)
-import Darwin
-#elseif canImport(Glibc)
-import Glibc
+@testable import DBUS
+
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#elseif canImport(Foundation)
+  import Foundation
 #endif
 
-@testable import DBUS
+#if canImport(Darwin)
+  import Darwin
+#elseif canImport(Glibc)
+  import Glibc
+#endif
 
 @Suite
 struct DBusAuthenticationHandlerTests {
@@ -52,7 +53,8 @@ struct DBusAuthenticationHandlerTests {
   @Test func initialBytesAreSentBeforeNul() throws {
     let channel = EmbeddedChannel()
     let initialBytes: [UInt8] = [0x12, 0x34, 0x56]
-    try DBusClient.addToPipeline(channel.pipeline, auth: .anonymous, enableUnixFDs: false, initialBytes: initialBytes)
+    try DBusClient.addToPipeline(
+      channel.pipeline, auth: .anonymous, enableUnixFDs: false, initialBytes: initialBytes)
 
     channel.pipeline.fireChannelActive()
 
@@ -138,9 +140,9 @@ struct DBusAuthenticationHandlerTests {
     }
 
     #if canImport(Glibc)
-    let userId = String(getuid())
+      let userId = String(getuid())
     #else
-    let userId = "0"
+      let userId = "0"
     #endif
 
     let mechanisms = DBusAuthMechanism.preferred(for: .external(userID: userId))
@@ -154,7 +156,8 @@ struct DBusAuthenticationHandlerTests {
     }
 
     let channel = EmbeddedChannel()
-    try DBusClient.addToPipeline(channel.pipeline, auth: .external(userID: userId), enableUnixFDs: false)
+    try DBusClient.addToPipeline(
+      channel.pipeline, auth: .external(userID: userId), enableUnixFDs: false)
     channel.pipeline.fireChannelActive()
 
     _ = try channel.readOutbound(as: ByteBuffer.self)

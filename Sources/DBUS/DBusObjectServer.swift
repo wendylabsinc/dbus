@@ -199,12 +199,14 @@ public actor DBusObjectServer: Sendable {
     guard message.messageType == .methodCall else { return }
     guard let path = message.path else { return }
 
-    logger.debug("DBusObjectServer received method call", metadata: [
-      "path": "\(path)",
-      "interface": "\(message.interface ?? "nil")",
-      "member": "\(message.member ?? "nil")",
-      "hasObject": "\(objects[path] != nil)"
-    ])
+    logger.debug(
+      "DBusObjectServer received method call",
+      metadata: [
+        "path": "\(path)",
+        "interface": "\(message.interface ?? "nil")",
+        "member": "\(message.member ?? "nil")",
+        "hasObject": "\(objects[path] != nil)",
+      ])
 
     guard let object = objects[path] else {
       logger.debug("Unknown object path, sending error", metadata: ["path": "\(path)"])

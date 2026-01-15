@@ -387,10 +387,11 @@ public actor DBusClient: Sendable {
     logger: Logger = Logger(label: "dbus.client"),
     _ handler: @Sendable @escaping (inout Replies, inout Send) async throws -> R
   ) async throws -> R {
-    let enableUnixFDs = switch address {
+    let enableUnixFDs =
+      switch address {
       case .unixDomainSocket: true
       case .v4, .v6: false
-    }
+      }
     let bootstrap = ClientBootstrap(group: MultiThreadedEventLoopGroup.singleton)
       .channelInitializer { channel in
         do {
@@ -470,10 +471,11 @@ public actor DBusClient: Sendable {
     let bootstrap = ClientBootstrap(group: MultiThreadedEventLoopGroup.singleton)
       .channelInitializer { channel in
         do {
-          let enableUnixFDs = switch address {
+          let enableUnixFDs =
+            switch address {
             case .unix, .unixAbstract: false
             case .tcp, .nonceTcp: true
-          }
+            }
           try DBusClient.addToPipeline(
             channel.pipeline,
             auth: auth,
@@ -579,8 +581,7 @@ public actor DBusClient: Sendable {
     case .unix, .unixAbstract:
       let socket = try address.unixSocketAddress()
       return try await bootstrap.connect(to: socket).get()
-    case 
-      .tcp(let host, let port, let family),
+    case .tcp(let host, let port, let family),
       .nonceTcp(let host, let port, let family, _):
       return try await connectTcp(bootstrap, host: host, port: port, family: family)
     }

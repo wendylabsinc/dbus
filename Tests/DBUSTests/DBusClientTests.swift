@@ -55,7 +55,8 @@ struct DBusClientTests {
       let reply = try await asyncChannel.executeThenClose { inbound, outbound in
         var replies = DBusClient.Replies(iterator: inbound.makeAsyncIterator())
         let send = DBusClient.Send(writer: outbound)
-        let connection = DBusClient.Connection(send: send, logger: Logger(label: "dbus.test.client"))
+        let connection = DBusClient.Connection(
+          send: send, logger: Logger(label: "dbus.test.client"))
 
         async let _ = connection.run(replies: &replies)
 
@@ -136,7 +137,8 @@ struct DBusClientTests {
       _ = try await asyncChannel.executeThenClose { inbound, outbound in
         var replies = DBusClient.Replies(iterator: inbound.makeAsyncIterator())
         let send = DBusClient.Send(writer: outbound)
-        let connection = DBusClient.Connection(send: send, logger: Logger(label: "dbus.test.client"))
+        let connection = DBusClient.Connection(
+          send: send, logger: Logger(label: "dbus.test.client"))
 
         async let _ = connection.run(replies: &replies)
 
