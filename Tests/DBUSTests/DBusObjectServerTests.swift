@@ -17,8 +17,6 @@ struct DBusObjectServerTests {
     ]
     await server.export(.init(path: "/org/test/Echo", interfaces: [iface]))
 
-    await conn.waitForHandler()
-
     let call = DBusMessage.createMethodCall(
       destination: "org.test",
       path: "/org/test/Echo",
@@ -28,7 +26,7 @@ struct DBusObjectServerTests {
       body: []
     )
 
-    await conn.emit(call)
+    await server.handle(message: call)
     let sent = await conn.sentRequests()
     #expect(sent.count == 1)
     #expect(sent[0].messageType == .methodReturn)
@@ -54,8 +52,6 @@ struct DBusObjectServerTests {
     ]
     await server.export(.init(path: "/org/test/Echo", interfaces: [iface]))
 
-    await conn.waitForHandler()
-
     let call = DBusMessage.createMethodCall(
       destination: "org.test",
       path: "/org/test/Echo",
@@ -66,7 +62,7 @@ struct DBusObjectServerTests {
       flags: [.noReplyExpected]
     )
 
-    await conn.emit(call)
+    await server.handle(message: call)
     let sent = await conn.sentRequests()
     #expect(sent.isEmpty)
   }
@@ -82,7 +78,6 @@ struct DBusObjectServerTests {
 
 actor MockConnection: DBusServerConnection {
   private var outbound: [DBusRequest] = []
-  private var handler: (@Sendable (DBusMessage) async -> Void)?
 
   func send(_ request: DBusRequest) async throws -> DBusMessage? {
     outbound.append(request)
@@ -90,21 +85,10 @@ actor MockConnection: DBusServerConnection {
   }
 
   func setMessageHandler(_ handler: @escaping @Sendable (DBusMessage) async -> Void) async {
-    self.handler = handler
-  }
-
-  func emit(_ message: DBusMessage) async {
-    guard let handler else { return }
-    await handler(message)
+    // Not used - tests call server.handle(message:) directly
   }
 
   func sentRequests() async -> [DBusRequest] {
     outbound
-  }
-
-  func waitForHandler() async {
-    while handler == nil {
-      await Task.yield()
-    }
   }
 }

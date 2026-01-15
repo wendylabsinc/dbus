@@ -53,22 +53,30 @@ struct DBusClientTests {
       }.get()
 
       let reply = try await asyncChannel.executeThenClose { inbound, outbound in
-        var replies = DBusClient.Replies(iterator: inbound.makeAsyncIterator())
+        let repliesBox = RepliesBox(DBusClient.Replies(iterator: inbound.makeAsyncIterator()))
         let send = DBusClient.Send(writer: outbound)
         let connection = DBusClient.Connection(
           send: send, logger: Logger(label: "dbus.test.client"))
 
-        async let _ = connection.run(replies: &replies)
+        return try await withThrowingTaskGroup(of: DBusMessage?.self) { group in
+          group.addTask {
+            try await connection.run(replies: &repliesBox.replies)
+            return nil
+          }
 
-        let request = DBusRequest.createMethodCall(
-          destination: "org.test.Service",
-          path: "/org/test/Object",
-          interface: "org.test.Interface",
-          method: "Ping"
-        )
+          let request = DBusRequest.createMethodCall(
+            destination: "org.test.Service",
+            path: "/org/test/Object",
+            interface: "org.test.Interface",
+            method: "Ping"
+          )
 
-        return try await withTimeout(500_000_000) {
-          try await connection.send(request)
+          let result = try await withTimeout(500_000_000) {
+            try await connection.send(request)
+          }
+
+          group.cancelAll()
+          return result
         }
       }
 
@@ -135,30 +143,36 @@ struct DBusClientTests {
       }.get()
 
       _ = try await asyncChannel.executeThenClose { inbound, outbound in
-        var replies = DBusClient.Replies(iterator: inbound.makeAsyncIterator())
+        let repliesBox = RepliesBox(DBusClient.Replies(iterator: inbound.makeAsyncIterator()))
         let send = DBusClient.Send(writer: outbound)
         let connection = DBusClient.Connection(
           send: send, logger: Logger(label: "dbus.test.client"))
 
-        async let _ = connection.run(replies: &replies)
+        return try await withThrowingTaskGroup(of: Bool.self) { group in
+          group.addTask {
+            try await connection.run(replies: &repliesBox.replies)
+            return true
+          }
 
-        let request = DBusRequest.createMethodCall(
-          destination: "org.test.Service",
-          path: "/org/test/Object",
-          interface: "org.test.Interface",
-          method: "NoReply"
-        )
+          let request = DBusRequest.createMethodCall(
+            destination: "org.test.Service",
+            path: "/org/test/Object",
+            interface: "org.test.Interface",
+            method: "NoReply"
+          )
 
-        do {
-          _ = try await connection.send(request, timeoutNanoseconds: 50_000_000)
-          #expect(Bool(false), "Expected timeout error")
-        } catch DBusError.timeout {
-          // Expected.
-        } catch {
-          #expect(Bool(false), "Unexpected error: \(error)")
+          do {
+            _ = try await connection.send(request, timeoutNanoseconds: 50_000_000)
+            #expect(Bool(false), "Expected timeout error")
+          } catch DBusError.timeout {
+            // Expected.
+          } catch {
+            #expect(Bool(false), "Unexpected error: \(error)")
+          }
+
+          group.cancelAll()
+          return true
         }
-
-        return true
       }
     } catch {
       _ = try? await server.close().get()
@@ -231,6 +245,11 @@ private final class NoReplyHandler: ChannelInboundHandler, @unchecked Sendable {
 
 private struct UncheckedSendable<T>: @unchecked Sendable {
   let value: T
+}
+
+private final class RepliesBox: @unchecked Sendable {
+  var replies: DBusClient.Replies
+  init(_ replies: DBusClient.Replies) { self.replies = replies }
 }
 
 private struct TimeoutError: Error {}
