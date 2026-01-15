@@ -66,9 +66,9 @@ public actor DBusClient: Sendable {
     }
 
     internal func run(replies: inout Replies) async throws {
-      logger.debug("Connection.run() starting message loop")
+      logger.trace("Connection.run() starting message loop")
       while let message = try await replies.next() {
-        logger.debug(
+        logger.trace(
           "Connection.run() received message from D-Bus",
           metadata: [
             "messageType": "\(message.messageType)",
@@ -92,7 +92,7 @@ public actor DBusClient: Sendable {
               "reply-to": "\(String(describing: replyTo))"
             ])
         } else if let handler = messageHandler {
-          logger.debug(
+          logger.trace(
             "Dispatching message to handler (no replyTo)",
             metadata: ["messageType": "\(message.messageType)"])
           await handler(message)
@@ -107,7 +107,7 @@ public actor DBusClient: Sendable {
             ])
         }
       }
-      logger.debug("Connection.run() message loop exited (replies.next() returned nil)")
+      logger.trace("Connection.run() message loop exited (replies.next() returned nil)")
     }
 
     public func send(_ request: DBusRequest) async throws -> DBusMessage? {
@@ -682,6 +682,7 @@ public actor DBusClient: Sendable {
     logger: Logger = Logger(label: "dbus.client")
   ) throws {
     let handlers: [any ChannelHandler] = [
+      DBusErrorLogger(logger: logger),  // Error logger at the front
       ByteToMessageHandler(LineBasedFrameDecoder()),
       DBusAuthenticationHandler(
         auth: auth,
@@ -696,6 +697,58 @@ public actor DBusClient: Sendable {
   }
 }
 
+/// Handler to log errors and channel lifecycle events for debugging
+internal final class DBusErrorLogger: ChannelDuplexHandler, @unchecked Sendable {
+  typealias InboundIn = ByteBuffer
+  typealias InboundOut = ByteBuffer
+  typealias OutboundIn = ByteBuffer
+  typealias OutboundOut = ByteBuffer
+
+  private let logger: Logger
+
+  init(logger: Logger) {
+    self.logger = logger
+  }
+
+  func channelRead(context: ChannelHandlerContext, data: NIOAny) {
+    context.fireChannelRead(data)
+  }
+
+  func channelReadComplete(context: ChannelHandlerContext) {
+    context.fireChannelReadComplete()
+  }
+
+  func channelInactive(context: ChannelHandlerContext) {
+    logger.debug("Channel became inactive")
+    context.fireChannelInactive()
+  }
+
+  func write(context: ChannelHandlerContext, data: NIOAny, promise: EventLoopPromise<Void>?) {
+    context.write(data, promise: promise)
+  }
+
+  func flush(context: ChannelHandlerContext) {
+    context.flush()
+  }
+
+  func errorCaught(context: ChannelHandlerContext, error: Error) {
+    logger.error("Error caught in D-Bus channel pipeline", metadata: [
+      "error": "\(error)",
+      "errorType": "\(type(of: error))"
+    ])
+    context.fireErrorCaught(error)
+  }
+
+  func channelWritabilityChanged(context: ChannelHandlerContext) {
+    context.fireChannelWritabilityChanged()
+  }
+
+  func userInboundEventTriggered(context: ChannelHandlerContext, event: Any) {
+    context.fireUserInboundEventTriggered(event)
+  }
+}
+
 internal enum DBusClientError: Error {
   case notConnected
 }
+

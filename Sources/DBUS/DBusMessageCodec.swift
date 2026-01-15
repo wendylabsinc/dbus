@@ -11,14 +11,12 @@ struct DBusMessageDecoder: ByteToMessageDecoder {
   }
 
   func decode(context: ChannelHandlerContext, buffer: inout ByteBuffer) throws -> DecodingState {
-    logger.debug(
-      "DBusMessageDecoder: Decoding message from buffer with \(buffer.readableBytes) bytes")
     let index = buffer.readerIndex
     do {
       let msg = try DBusMessage(from: &buffer)
       buffer.discardReadBytes()
-      logger.debug(
-        "DBusMessageDecoder: Successfully decoded D-Bus message",
+      logger.trace(
+        "Decoded D-Bus message",
         metadata: [
           "type": "\(msg.messageType)",
           "serial": "\(msg.serial)",
@@ -31,15 +29,12 @@ struct DBusMessageDecoder: ByteToMessageDecoder {
       return .continue
     } catch DBusError.truncatedHeaderFields, DBusError.truncatedBody, DBusError.earlyEOF {
       // Not enough data yet
-      logger.trace("Not enough data for complete message, waiting for more")
       buffer.moveReaderIndex(to: index)
       return .needMoreData
     } catch {
       logger.warning(
-        "DBusMessageDecoder: Failed to decode D-Bus message",
-        metadata: [
-          "error": "\(error)"
-        ])
+        "Failed to decode D-Bus message",
+        metadata: ["error": "\(error)"])
       throw error
     }
   }
@@ -55,18 +50,23 @@ struct DBusMessageEncoder: MessageToByteEncoder {
   }
 
   func encode(data: DBusMessage, out: inout ByteBuffer) throws {
-    try data.validate(allowUnixFds: false, unixFdsError: .unixFdUnsupported)
     logger.trace(
       "Encoding D-Bus message",
       metadata: [
         "type": "\(data.messageType)",
         "serial": "\(data.serial)",
+        "path": "\(data.path ?? "nil")",
+        "interface": "\(data.interface ?? "nil")",
+        "member": "\(data.member ?? "nil")",
+        "destination": "\(data.destination ?? "nil")"
       ])
+    do {
+      try data.validate(allowUnixFds: false, unixFdsError: .unixFdUnsupported)
+    } catch {
+      logger.error("D-Bus message validation failed", metadata: ["error": "\(error)"])
+      throw error
+    }
     data.write(to: &out)
-    logger.trace(
-      "Encoded message to bytes",
-      metadata: [
-        "byte-size": "\(out.readableBytes)"
-      ])
+    logger.trace("Encoded D-Bus message", metadata: ["byteSize": "\(out.readableBytes)"])
   }
 }

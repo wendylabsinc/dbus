@@ -668,9 +668,11 @@ extension DBusValue {
       let start = buffer.writerIndex
       buffer.writeInteger(UInt32(0), endianness: byteOrder)  // Placeholder for length
 
-      // Only align and write content if there are elements
+      // D-Bus spec: even empty arrays must include alignment padding for element type
+      // Dict entries have 8-byte alignment
+      buffer.alignWriter(to: 8)
+
       if !dict.isEmpty {
-        buffer.alignWriter(to: 8)
         let dictStart = buffer.writerIndex
         for (k, v) in dict {
           buffer.alignWriter(to: 8)
