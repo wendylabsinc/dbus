@@ -732,10 +732,12 @@ internal final class DBusErrorLogger: ChannelDuplexHandler, @unchecked Sendable 
   }
 
   func errorCaught(context: ChannelHandlerContext, error: Error) {
-    logger.error("Error caught in D-Bus channel pipeline", metadata: [
-      "error": "\(error)",
-      "errorType": "\(type(of: error))"
-    ])
+    logger.error(
+      "Error caught in D-Bus channel pipeline",
+      metadata: [
+        "error": "\(error)",
+        "errorType": "\(type(of: error))",
+      ])
     context.fireErrorCaught(error)
   }
 
@@ -751,4 +753,3 @@ internal final class DBusErrorLogger: ChannelDuplexHandler, @unchecked Sendable 
 internal enum DBusClientError: Error {
   case notConnected
 }
-

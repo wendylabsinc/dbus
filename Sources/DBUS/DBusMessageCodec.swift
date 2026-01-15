@@ -58,7 +58,7 @@ struct DBusMessageEncoder: MessageToByteEncoder {
         "path": "\(data.path ?? "nil")",
         "interface": "\(data.interface ?? "nil")",
         "member": "\(data.member ?? "nil")",
-        "destination": "\(data.destination ?? "nil")"
+        "destination": "\(data.destination ?? "nil")",
       ])
     do {
       try data.validate(allowUnixFds: false, unixFdsError: .unixFdUnsupported)
