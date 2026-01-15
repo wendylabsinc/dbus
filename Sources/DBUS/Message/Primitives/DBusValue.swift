@@ -130,8 +130,10 @@ public indirect enum DBusValue: Hashable, Sendable {
       let elementSig = String(typeSignature.dropFirst())
       let arrayLen = try buffer.requireInteger(endianness: byteOrder) as UInt32
 
-      // If array length is 0, there's no need to align further
+      // If array length is 0, still consume alignment padding then return empty container
       if arrayLen == 0 {
+        // Align the buffer to the element's alignment (consuming any padding written)
+        buffer.alignReader(to: Self.alignment(for: elementSig))
         if elementSig.starts(with: "{") {
           // Create empty dictionary with the correct type signature
           return .dictionary([:])
