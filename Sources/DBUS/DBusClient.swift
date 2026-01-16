@@ -499,8 +499,8 @@ public actor DBusClient: Sendable {
         do {
           let enableUnixFDs =
             switch address {
-            case .unix, .unixAbstract: false
-            case .tcp, .nonceTcp: true
+            case .unix, .unixAbstract: true
+            case .tcp, .nonceTcp: false
             }
           try DBusClient.addToPipeline(
             channel.pipeline,

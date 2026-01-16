@@ -13,10 +13,11 @@ extension ByteBuffer {
   }
 
   mutating func alignWriter(to alignment: Int) {
-    let padding = (alignment - (self.writerIndex % alignment)) % alignment
-    if padding > 0 {
-      self.writeRepeatingByte(0, count: padding)
+    if self.writerIndex % alignment == 0 {
+      return
     }
+    let padding = alignment - (self.writerIndex % alignment)
+    self.writeRepeatingByte(0, count: padding)
   }
 
   mutating func requireInteger<T: FixedWidthInteger>(endianness: Endianness) throws -> T {

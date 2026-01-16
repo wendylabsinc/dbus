@@ -330,7 +330,7 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
       }
       self.writeBuffer.removeAll(keepingCapacity: true)
       self.state = .authenticated
-      logger.info("D-Bus authentication completed successfully - now in message mode")
+      logger.debug("D-Bus authentication completed successfully - now in message mode")
 
       // Check remaining buffered data
       if buffer.readableBytes > 0 {
