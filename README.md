@@ -51,7 +51,7 @@ Add the following to your `Package.swift` file:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/edgeengineer/dbus.git", from: "0.1.0")
+    .package(url: "https://github.com/wendylabsinc/dbus.git", from: "0.1.0")
 ]
 ```
 
@@ -77,6 +77,38 @@ try await DBusClient.withConnection(
     // You've got a DBUS connection!
 }
 ```
+
+You can also resolve addresses from environment variables or parse D-Bus address strings:
+
+```swift
+// Resolve the session or system bus address from the environment.
+try await DBusClient.withSessionBus(auth: .external(userID: getuid())) { connection in
+    // Session bus connection.
+}
+
+// Parse a D-Bus address string and connect.
+let address = try DBusAddress.parse("unix:path=/var/run/dbus/system_bus_socket")
+try await DBusClient.withConnection(to: address, auth: .external(userID: getuid())) { connection in
+    // Connected using a parsed address.
+}
+```
+
+`DBusAddress.parse` returns a `DBusAddress` value that you can also construct directly:
+
+```swift
+let address: DBusAddress = .tcp(host: "127.0.0.1", port: 1234, family: nil)
+```
+
+Supported address formats:
+- `unix:path=/path/to/socket`
+- `unix:abstract=socket_name` (Linux only)
+- `tcp:host=127.0.0.1,port=1234` (optional `family=ipv4|ipv6`)
+- `nonce-tcp:host=127.0.0.1,port=1234,noncefile=/path` (optional `family=ipv4|ipv6`)
+- Lists separated by `;` (first supported entry is used)
+
+Notes:
+- `nonce-tcp` requires a 16-byte nonce file; the nonce is sent before authentication.
+- `tcp` hostnames resolve asynchronously during connect; prefer IP literals to avoid DNS.
 
 ### Calling a Method
 
@@ -248,7 +280,6 @@ While DBUS provides a solid foundation for D-Bus communication, some features ar
 ### **Known Issues**
 - Empty arrays default to byte array type signature regardless of intended type
 - Complex nested dictionary structures may have parsing edge cases
-- Message serial number overflow not handled
 - Authentication handler has potential race conditions
 
 ### **Planned Features**

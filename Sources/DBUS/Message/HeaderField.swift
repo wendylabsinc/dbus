@@ -112,9 +112,10 @@ public struct HeaderField: Sendable {
 
   // D-Bus object path: must start with '/', no empty segments, no trailing '/', only [A-Za-z0-9_]
   static func isValidObjectPath(_ s: String) -> Bool {
-    guard s.first == "/", s.count > 1 else { return false }
+    guard s.first == "/" else { return false }
+    if s == "/" { return true }
     if s.contains("//") { return false }
-    if s.last == "/" && s.count > 1 { return false }
+    if s.last == "/" { return false }
     for segment in s.split(separator: "/") where !segment.isEmpty {
       if !segment.allSatisfy({ $0.isLetter || $0.isNumber || $0 == "_" }) { return false }
     }

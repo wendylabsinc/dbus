@@ -122,7 +122,7 @@ struct App {
           ) { _ in
             let bytes = await valueStore.read()
             return [.array(bytes.map { DBusValue.byte($0) })]
-          },
+          }
         ],
         properties: [
           .init(name: "UUID", value: .string(descriptorUUID)),
@@ -159,7 +159,8 @@ struct App {
       _ = try await connection.send(gattRegister)
       logger.info("Registered GATT application at \(gattRootPath)")
 
-      logger.info("Server running. Inspect with `bluetoothctl` or `busctl introspect org.bluez \(advPath)`")
+      logger.info(
+        "Server running. Inspect with `bluetoothctl` or `busctl introspect org.bluez \(advPath)`")
       // Keep the connection alive
       try await Task.sleep(nanoseconds: 60 * 60 * 1_000_000_000)  // 1 hour
     }

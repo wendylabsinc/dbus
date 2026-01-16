@@ -1,5 +1,9 @@
 import NIOCore
 
+/// A high-level builder for D-Bus messages sent by clients or servers.
+///
+/// ``DBusRequest`` captures the headers, body, and flags needed to construct
+/// a full ``DBusMessage`` with an assigned serial number.
 public struct DBusRequest: Sendable {
   /// The byte order used for encoding numeric values in this message.
   public var byteOrder: Endianness
@@ -23,6 +27,11 @@ public struct DBusRequest: Sendable {
   /// The body is an array of ``DBusValue`` instances that represent the arguments or return values of the message.
   public var body: [DBusValue]
 
+  /// Unix file descriptors associated with this message.
+  ///
+  /// These correspond to indexes referenced by ``DBusValue/unixFd`` in the body.
+  public var unixFds: [CInt]
+
   /// Creates a D-Bus method call message.
   ///
   /// This is the primary way to create messages for invoking methods on D-Bus services.
@@ -35,6 +44,8 @@ public struct DBusRequest: Sendable {
   ///   - serial: A unique serial number for this message.
   ///   - body: An array of ``DBusValue`` instances representing the method arguments. Defaults to empty.
   ///   - flags: Message flags to set. Defaults to no flags.
+  ///   - signature: Optional explicit body signature, required for typed empty containers.
+  ///   - unixFds: Unix file descriptors referenced by ``DBusValue/unixFd`` values in the body.
   ///
   /// - Returns: A configured ``DBusMessage`` ready to be sent.
   ///
@@ -54,7 +65,9 @@ public struct DBusRequest: Sendable {
     interface: String,
     method: String,
     body: [DBusValue] = [],
-    flags: DBusMessage.Flags = []
+    flags: DBusMessage.Flags = [],
+    signature: String? = nil,
+    unixFds: [CInt] = []
   ) -> DBusRequest {
     var headerFields = [
       HeaderField(
@@ -75,7 +88,14 @@ public struct DBusRequest: Sendable {
       ),
     ]
 
-    if !body.isEmpty {
+    if let signature {
+      headerFields.append(
+        HeaderField(
+          code: .signature,
+          variant: DBusVariant(.signature(signature))
+        )
+      )
+    } else if !body.isEmpty {
       headerFields.append(
         HeaderField(
           code: .signature,
@@ -92,7 +112,8 @@ public struct DBusRequest: Sendable {
       flags: flags,
       protocolVersion: 1,
       headerFields: headerFields,
-      body: body
+      body: body,
+      unixFds: unixFds
     )
   }
 
@@ -101,9 +122,16 @@ public struct DBusRequest: Sendable {
   /// - Parameters:
   ///   - request: The original method call being replied to.
   ///   - body: The return values for the method. Defaults to an empty body.
+  ///   - signature: Optional explicit body signature, required for typed empty containers.
+  ///   - unixFds: Unix file descriptors referenced by ``DBusValue/unixFd`` values in the body.
   ///
   /// - Returns: A configured ``DBusRequest`` representing the method return.
-  public static func createMethodReturn(replyingTo request: DBusMessage, body: [DBusValue] = [])
+  public static func createMethodReturn(
+    replyingTo request: DBusMessage,
+    body: [DBusValue] = [],
+    signature: String? = nil,
+    unixFds: [CInt] = []
+  )
     -> DBusRequest
   {
     var headerFields: [HeaderField] = [
@@ -116,7 +144,14 @@ public struct DBusRequest: Sendable {
       )
     }
 
-    if !body.isEmpty {
+    if let signature {
+      headerFields.append(
+        HeaderField(
+          code: .signature,
+          variant: DBusVariant(.signature(signature))
+        )
+      )
+    } else if !body.isEmpty {
       headerFields.append(
         HeaderField(
           code: .signature,
@@ -131,7 +166,8 @@ public struct DBusRequest: Sendable {
       flags: [],
       protocolVersion: 1,
       headerFields: headerFields,
-      body: body
+      body: body,
+      unixFds: unixFds
     )
   }
 
@@ -141,8 +177,14 @@ public struct DBusRequest: Sendable {
   ///   - request: The original method call being replied to.
   ///   - errorName: The D-Bus error name (e.g. "org.freedesktop.DBus.Error.UnknownMethod").
   ///   - body: Optional error payload values.
+  ///   - signature: Optional explicit body signature, required for typed empty containers.
+  ///   - unixFds: Unix file descriptors referenced by ``DBusValue/unixFd`` values in the body.
   public static func createError(
-    replyingTo request: DBusMessage, errorName: String, body: [DBusValue] = []
+    replyingTo request: DBusMessage,
+    errorName: String,
+    body: [DBusValue] = [],
+    signature: String? = nil,
+    unixFds: [CInt] = []
   ) -> DBusRequest {
     var headerFields: [HeaderField] = [
       HeaderField(code: .errorName, variant: DBusVariant(.string(errorName))),
@@ -155,7 +197,14 @@ public struct DBusRequest: Sendable {
       )
     }
 
-    if !body.isEmpty {
+    if let signature {
+      headerFields.append(
+        HeaderField(
+          code: .signature,
+          variant: DBusVariant(.signature(signature))
+        )
+      )
+    } else if !body.isEmpty {
       headerFields.append(
         HeaderField(
           code: .signature,
@@ -170,7 +219,8 @@ public struct DBusRequest: Sendable {
       flags: [],
       protocolVersion: 1,
       headerFields: headerFields,
-      body: body
+      body: body,
+      unixFds: unixFds
     )
   }
 
@@ -182,12 +232,16 @@ public struct DBusRequest: Sendable {
   ///   - name: The signal name.
   ///   - destination: Optional destination unique/bus name. Signals normally broadcast; provide to limit.
   ///   - body: Signal payload values.
+  ///   - signature: Optional explicit body signature, required for typed empty containers.
+  ///   - unixFds: Unix file descriptors referenced by ``DBusValue/unixFd`` values in the body.
   public static func createSignal(
     path: String,
     interface: String,
     name: String,
     destination: String? = nil,
-    body: [DBusValue] = []
+    body: [DBusValue] = [],
+    signature: String? = nil,
+    unixFds: [CInt] = []
   ) -> DBusRequest {
     var headerFields: [HeaderField] = [
       HeaderField(code: .path, variant: DBusVariant(.objectPath(path))),
@@ -201,7 +255,14 @@ public struct DBusRequest: Sendable {
       )
     }
 
-    if !body.isEmpty {
+    if let signature {
+      headerFields.append(
+        HeaderField(
+          code: .signature,
+          variant: DBusVariant(.signature(signature))
+        )
+      )
+    } else if !body.isEmpty {
       headerFields.append(
         HeaderField(
           code: .signature,
@@ -216,7 +277,8 @@ public struct DBusRequest: Sendable {
       flags: [],
       protocolVersion: 1,
       headerFields: headerFields,
-      body: body
+      body: body,
+      unixFds: unixFds
     )
   }
 }
@@ -272,6 +334,11 @@ public struct DBusMessage: Sendable {
   /// The body is an array of ``DBusValue`` instances that represent the arguments or return values of the message.
   public var body: [DBusValue]
 
+  /// Unix file descriptors associated with this message.
+  ///
+  /// These correspond to indexes referenced by ``DBusValue/unixFd`` in the body.
+  public var unixFds: [CInt]
+
   /// The serial number of the message this message is replying to, if applicable.
   ///
   /// This property extracts the reply serial from the header fields. It returns `nil` for messages
@@ -284,6 +351,16 @@ public struct DBusMessage: Sendable {
       return nil
     }
     return replyTo
+  }
+
+  /// The number of Unix file descriptors attached to this message, if present.
+  public var unixFdsCount: UInt32? {
+    guard
+      case .uint32(let count) = headerFields.first(where: { $0.code == .unixFds })?.variant.value
+    else {
+      return nil
+    }
+    return count
   }
 
   /// The object path the message targets, if present.
@@ -330,7 +407,8 @@ public struct DBusMessage: Sendable {
   /// The unique or well-known name of the destination, if provided.
   public var destination: String? {
     guard
-      case .string(let destination) = headerFields.first(where: { $0.code == .destination })?.variant
+      case .string(let destination) = headerFields.first(where: { $0.code == .destination })?
+        .variant
         .value
     else {
       return nil
@@ -348,7 +426,8 @@ public struct DBusMessage: Sendable {
     case .byte:
       return .byte(try buffer.requireInteger(endianness: byteOrder))
     case .boolean:
-      return .boolean(try buffer.requireInteger(endianness: byteOrder) != 0 as UInt8)
+      let value: UInt32 = try buffer.requireInteger(endianness: byteOrder)
+      return .boolean(value != 0)
     case .int16:
       return .int16(try buffer.requireInteger(endianness: byteOrder))
     case .uint16:
@@ -376,17 +455,50 @@ public struct DBusMessage: Sendable {
       return .unixFd(try buffer.requireInteger(endianness: byteOrder))
     case .array(let elementType):
       let byteLength = try buffer.requireInteger(endianness: byteOrder) as UInt32
-      let readerIndex = buffer.readerIndex
-      let endReaderIndex = readerIndex + Int(byteLength)
-      var values: [DBusValue] = []
-
-      while buffer.readerIndex < endReaderIndex {
+      if byteLength == 0 {
+        // Consume alignment padding even for empty arrays
         buffer.alignReader(to: elementType.alignment)
-        let value = try Self.readValue(from: &buffer, type: elementType, byteOrder: byteOrder)
-        values.append(value)
+        if case .dictEntry = elementType {
+          return .dictionary([:])
+        }
+        return .array([])
       }
 
-      return .array(values)
+      buffer.alignReader(to: elementType.alignment)
+      let endReaderIndex = buffer.readerIndex + Int(byteLength)
+      if endReaderIndex > buffer.writerIndex {
+        throw DBusError.invalidHeader
+      }
+      switch elementType {
+      case .dictEntry(let keyType, let valueType):
+        var dict: [DBusValue: DBusValue] = [:]
+        while buffer.readerIndex < endReaderIndex {
+          buffer.alignReader(to: elementType.alignment)
+          let key = try Self.readValue(from: &buffer, type: keyType, byteOrder: byteOrder)
+          let value = try Self.readValue(from: &buffer, type: valueType, byteOrder: byteOrder)
+          dict[key] = value
+        }
+
+        if buffer.readerIndex > endReaderIndex {
+          throw DBusError.invalidHeader
+        }
+
+        return .dictionary(dict)
+      default:
+        var values: [DBusValue] = []
+
+        while buffer.readerIndex < endReaderIndex {
+          buffer.alignReader(to: elementType.alignment)
+          let value = try Self.readValue(from: &buffer, type: elementType, byteOrder: byteOrder)
+          values.append(value)
+        }
+
+        if buffer.readerIndex > endReaderIndex {
+          throw DBusError.invalidHeader
+        }
+
+        return .array(values)
+      }
     case .dictEntry(let keyType, let valueType):
       let key = try Self.readValue(from: &buffer, type: keyType, byteOrder: byteOrder)
       let value = try Self.readValue(from: &buffer, type: valueType, byteOrder: byteOrder)
@@ -459,12 +571,18 @@ public struct DBusMessage: Sendable {
     }
 
     if sig.isEmpty {
+      guard body.readableBytes == 0 else {
+        throw DBusError.invalidBody
+      }
       return []
     }
 
     var bufferCopy = body
     let signature = try DBusTypeSignature(sig)
     let result = try Self.parseArguments(from: &bufferCopy, from: signature, byteOrder: byteOrder)
+    guard bufferCopy.readableBytes == 0 else {
+      throw DBusError.invalidBody
+    }
 
     body = bufferCopy
     return result
@@ -477,7 +595,8 @@ public struct DBusMessage: Sendable {
     protocolVersion: UInt8,
     serial: UInt32,
     headerFields: [HeaderField],
-    body: [DBusValue]
+    body: [DBusValue],
+    unixFds: [CInt] = []
   ) {
     self.byteOrder = byteOrder
     self.messageType = messageType
@@ -486,6 +605,7 @@ public struct DBusMessage: Sendable {
     self.serial = serial
     self.headerFields = headerFields
     self.body = body
+    self.unixFds = unixFds
   }
 
   init(from buffer: inout ByteBuffer) throws {
@@ -503,20 +623,28 @@ public struct DBusMessage: Sendable {
     }
     self.byteOrder = byteOrder
 
-    guard let typeRaw: UInt8 = buffer.readInteger(),
-      let messageType = MessageType(rawValue: typeRaw)
-    else {
+    guard let typeRaw: UInt8 = buffer.readInteger() else {
+      throw DBusError.earlyEOF
+    }
+    guard let messageType = MessageType(rawValue: typeRaw) else {
       throw DBusError.invalidMessageType
     }
     self.messageType = messageType
 
-    guard let flagsRaw: UInt8 = buffer.readInteger(),
-      let version: UInt8 = buffer.readInteger(),
-      let bodyLength: UInt32 = buffer.readInteger(endianness: byteOrder),
-      let serial: UInt32 = buffer.readInteger(endianness: byteOrder),
-      let headerFieldsLength: UInt32 = buffer.readInteger(endianness: byteOrder)
-    else {
-      throw DBusError.invalidHeader
+    guard let flagsRaw: UInt8 = buffer.readInteger() else {
+      throw DBusError.earlyEOF
+    }
+    guard let version: UInt8 = buffer.readInteger() else {
+      throw DBusError.earlyEOF
+    }
+    guard let bodyLength: UInt32 = buffer.readInteger(endianness: byteOrder) else {
+      throw DBusError.earlyEOF
+    }
+    guard let serial: UInt32 = buffer.readInteger(endianness: byteOrder) else {
+      throw DBusError.earlyEOF
+    }
+    guard let headerFieldsLength: UInt32 = buffer.readInteger(endianness: byteOrder) else {
+      throw DBusError.earlyEOF
     }
 
     self.flags = Flags(rawValue: flagsRaw)
@@ -540,6 +668,7 @@ public struct DBusMessage: Sendable {
     }
     self.body = try Self.parseArguments(
       headerFields: headerFields, body: &body, byteOrder: byteOrder)
+    self.unixFds = []
   }
 }
 
@@ -563,8 +692,18 @@ extension DBusMessage {
     let headerLenPos = buffer.writerIndex
     buffer.writeInteger(UInt32(0), endianness: byteOrder)
     // Write header fields
+    var fields = headerFields.filter { $0.code != .unixFds }
+    if !unixFds.isEmpty {
+      fields.append(
+        HeaderField(
+          code: .unixFds,
+          variant: DBusVariant(.uint32(UInt32(unixFds.count)))
+        )
+      )
+    }
+
     let headerStart = buffer.writerIndex
-    for field in headerFields {
+    for field in fields {
       field.write(to: &buffer, byteOrder: byteOrder)
     }
     let headerEnd = buffer.writerIndex
@@ -593,7 +732,9 @@ extension DBusMessage {
     method: String,
     serial: UInt32,
     body: [DBusValue] = [],
-    flags: Flags = []
+    flags: Flags = [],
+    signature: String? = nil,
+    unixFds: [CInt] = []
   ) -> DBusMessage {
     var headerFields = [
       HeaderField(
@@ -614,7 +755,14 @@ extension DBusMessage {
       ),
     ]
 
-    if !body.isEmpty {
+    if let signature {
+      headerFields.append(
+        HeaderField(
+          code: .signature,
+          variant: DBusVariant(.signature(signature))
+        )
+      )
+    } else if !body.isEmpty {
       headerFields.append(
         HeaderField(
           code: .signature,
@@ -632,7 +780,8 @@ extension DBusMessage {
       protocolVersion: 1,
       serial: serial,
       headerFields: headerFields,
-      body: body
+      body: body,
+      unixFds: unixFds
     )
   }
 }

@@ -10,8 +10,8 @@ on:
 
 # Jobs to run
 jobs:
-  build-and-test:
-    name: Swift ${{ matrix.swift }} on Linux (${{ matrix.artifact-name }})
+  build-musl:
+    name: Swift ${{ matrix.swift }} MUSL build (${{ matrix.artifact-name }})
     runs-on: ${{ matrix.os }}
     container: ${{ matrix.container }}
     strategy:
@@ -33,54 +33,54 @@ jobs:
             swift-sdk-url: https://download.swift.org/swift-6.1-release/static-sdk/swift-6.1-RELEASE/swift-6.1-RELEASE_static-linux-0.0.1.artifactbundle.tar.gz
             swift-sdk-checksum: 111c6f7d280a651208b8c74c0521dd99365d785c1976a6e23162f55f65379ac6
     steps:
-    # 1. Check out repository code
-    - name: Check out repository code
-      uses: actions/checkout@v4
-    - name: Install Swift SDK
-      if: ${{ matrix.swift-sdk-url != '' }}
-      run: |
-        swift sdk install ${{ matrix.swift-sdk-url }} --checksum ${{ matrix.swift-sdk-checksum }}
+      # 1. Check out repository code
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - name: Install Swift SDK
+        if: ${{ matrix.swift-sdk-url != '' }}
+        run: |
+          swift sdk install ${{ matrix.swift-sdk-url }} --checksum ${{ matrix.swift-sdk-checksum }}
 
-    # === Linux Setup (Ubuntu 22.04) ===
-    - name: Build
-      shell: bash
-      run: |
-        args=(
-          --configuration release  
-        )
+      # === Linux Setup (Ubuntu 22.04) ===
+      - name: Build
+        shell: bash
+        run: |
+          args=(
+            --configuration release  
+          )
 
-        if [ -n "${{ matrix.swift-sdk }}" ]; then
-          args+=(--swift-sdk "${{ matrix.swift-sdk }}")
-        fi
+          if [ -n "${{ matrix.swift-sdk }}" ]; then
+            args+=(--swift-sdk "${{ matrix.swift-sdk }}")
+          fi
 
-        swift build "${args[@]}"
-    # 8. Run tests
-    - name: Run Tests
-      shell: bash
-      run: |
-        args=(
-          --configuration release  
-        )
-         # Run tests without the static SDK to enable code coverage
-        swift test --enable-code-coverage "${args[@]}"
-        
-    # Generate code coverage report
-    - name: Generate Code Coverage Report
-      shell: bash
-      run: |
-        llvm-cov export -format="lcov" .build/release/*.xctest -instr-profile .build/release/codecov/default.profdata > coverage.lcov
-    
-    # Install dependencies for Codecov
-    - name: Install dependencies
-      shell: bash
-      run: |
-        apt-get update
-        apt-get install -y curl gnupg
-    
-    # Upload coverage to Codecov
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v5
-      with:
-        directory: ./
-        token: ${{ secrets.CODECOV_TOKEN }}
-        fail_ci_if_error: false
+          swift build "${args[@]}"
+
+  test-glibc:
+    name: Swift 6.1 tests (glibc)
+    runs-on: ubuntu-22.04
+    container: swift:6.1
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - name: Run Tests
+        shell: bash
+        run: |
+          args=(
+            --configuration release  
+          )
+          swift test --enable-code-coverage "${args[@]}"
+      - name: Generate Code Coverage Report
+        shell: bash
+        run: |
+          llvm-cov export -format="lcov" .build/release/*.xctest -instr-profile .build/release/codecov/default.profdata > coverage.lcov
+      - name: Install dependencies
+        shell: bash
+        run: |
+          apt-get update
+          apt-get install -y curl gnupg
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          directory: ./
+          token: ${{ secrets.CODECOV_TOKEN }}
+          fail_ci_if_error: false

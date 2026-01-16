@@ -1,8 +1,13 @@
-import Foundation
 import Logging
 import NIO
 import NIOCore
 import NIOExtras
+
+#if canImport(FoundationEssentials)
+  import FoundationEssentials
+#elseif canImport(Foundation)
+  import Foundation
+#endif
 
 /// compiler directive that checks if the Darwin framework can be imported.
 /// The Darwin framework is only available on Apple platforms (macOS, iOS, iPadOS, tvOS, watchOS),
@@ -138,6 +143,8 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
     case waitingForNullReply
     /// Authentication sent, waiting for OK response
     case waitingForOK
+    /// Waiting for UNIX FD negotiation response
+    case waitingForUnixFdsAgreement
     /// Successfully authenticated, normal message passing can begin
     case authenticated
     /// Authentication failed
@@ -147,12 +154,25 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
   private var state: State = .waitingForNullReply
   private var buffer = ByteBufferAllocator().buffer(capacity: 128)
   private let auth: AuthType
+  private let enableUnixFDs: Bool
+  private let initialBytes: [UInt8]
+  private var unixFdsNegotiated = false
   private let logger: Logger
   private var writeBuffer = [ByteBuffer]()
+  private var pendingMechanisms: [DBusAuthMechanism]
+  private var currentMechanism: DBusAuthMechanism?
 
-  internal init(auth: AuthType, logger: Logger) {
+  internal init(
+    auth: AuthType,
+    enableUnixFDs: Bool,
+    initialBytes: [UInt8] = [],
+    logger: Logger
+  ) {
     self.auth = auth
+    self.enableUnixFDs = enableUnixFDs
+    self.initialBytes = initialBytes
     self.logger = logger
+    self.pendingMechanisms = DBusAuthMechanism.preferred(for: auth)
   }
 
   internal func channelRead(context: ChannelHandlerContext, data: NIOAny) {
@@ -175,7 +195,7 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
         state = .waitingForOK
         logger.debug("Waiting for authentication response from server")
       case .waitingForOK:
-        guard var line = buffer.readString(length: buffer.readableBytes) else { return }
+        guard var line = readLine() else { return }
         logger.trace(
           "Received authentication response",
           metadata: [
@@ -183,48 +203,43 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
           ]
         )
 
-        if line.starts(with: "OK ") {
-          line = String(line.dropFirst(3))
-          logger.debug("Authentication successful, sending BEGIN command")
-
-          let begin = "BEGIN\r\n"
-          let out = context.channel.allocator.buffer(string: begin)
-          context.writeAndFlush(self.wrapOutboundOut(out), promise: nil)
-
+        if line.starts(with: "DATA ") {
+          guard let currentMechanism else {
+            state = .failed
+            context.fireErrorCaught(DBusAuthenticationError.invalidAuthCommand)
+            return
+          }
+          let payload = String(line.dropFirst(5)).trimmingCharacters(in: .whitespacesAndNewlines)
           do {
-            let handler = try context.pipeline.syncOperations.handler(
-              type: ByteToMessageHandler<LineBasedFrameDecoder>.self)
-            _ = context.pipeline.syncOperations.removeHandler(handler)
-
-            // Directly process buffers after handler removal
-            for buffer in self.writeBuffer {
-              context.writeAndFlush(self.wrapOutboundOut(buffer), promise: nil)
-            }
-            self.writeBuffer.removeAll(keepingCapacity: true)
-            self.state = .authenticated
-            logger.debug("D-Bus authentication completed successfully")
-            context.fireChannelActive()
-            context.fireChannelWritabilityChanged()
+            let response = try currentMechanism.cookieResponse(for: payload)
+            let out = context.channel.allocator.buffer(string: response)
+            context.writeAndFlush(self.wrapOutboundOut(out), promise: nil)
           } catch {
-            logger.debug(
-              "Failed to complete authentication setup",
-              metadata: [
-                "error": "\(error)"
-              ])
+            state = .failed
             context.fireErrorCaught(error)
           }
-        } else if line.starts(with: "REJECTED ") {
-          let mechanisms = String(line.dropFirst(9)).trimmingCharacters(in: .whitespacesAndNewlines)
-          logger.debug(
-            "Authentication rejected by server",
-            metadata: [
-              "available-mechanisms": "\(mechanisms)"
-            ])
-          context.fireErrorCaught(DBusAuthenticationError.invalidAuthCommand)
-          // let mechanisms = line.split(separator: " ")
-          //     .dropFirst()
-
           return
+        }
+
+        if line.starts(with: "OK ") {
+          line = String(line.dropFirst(3))
+          if enableUnixFDs {
+            logger.debug("Authentication successful, negotiating UNIX_FD support")
+            let negotiate = "NEGOTIATE_UNIX_FD\r\n"
+            let out = context.channel.allocator.buffer(string: negotiate)
+            context.writeAndFlush(self.wrapOutboundOut(out), promise: nil)
+            state = .waitingForUnixFdsAgreement
+          } else {
+            logger.debug("Authentication successful, sending BEGIN command")
+            completeAuthentication(context: context)
+          }
+        } else if line.starts(with: "REJECTED") {
+          let trimmed = line.dropFirst("REJECTED".count)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+          let offered = trimmed.isEmpty ? nil : Set(trimmed.split(separator: " ").map(String.init))
+          handleRejected(offered: offered, context: context, rawLine: line)
+        } else if line.starts(with: "ERROR") {
+          handleRejected(offered: nil, context: context, rawLine: line)
         } else {
           logger.debug(
             "Received unexpected authentication response",
@@ -236,8 +251,38 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
           context.fireErrorCaught(DBusAuthenticationError.invalidAuthCommand)
           return
         }
+      case .waitingForUnixFdsAgreement:
+        guard let line = readLine() else { return }
+        logger.trace(
+          "Received UNIX_FD negotiation response",
+          metadata: [
+            "response": "\(line.trimmingCharacters(in: .whitespacesAndNewlines))"
+          ]
+        )
+
+        if line.starts(with: "AGREE_UNIX_FD") {
+          unixFdsNegotiated = true
+          logger.debug("UNIX_FD negotiation successful, sending BEGIN command")
+          completeAuthentication(context: context)
+        } else if line.starts(with: "ERROR") {
+          unixFdsNegotiated = false
+          logger.debug("UNIX_FD negotiation rejected, proceeding without FD support")
+          completeAuthentication(context: context)
+        } else {
+          logger.debug(
+            "Received unexpected UNIX_FD negotiation response",
+            metadata: [
+              "response": "\(line.trimmingCharacters(in: .whitespacesAndNewlines))"
+            ]
+          )
+          state = .failed
+          context.fireErrorCaught(DBusAuthenticationError.invalidAuthCommand)
+          return
+        }
       case .authenticated:
         if buffer.readableBytes > 0 {
+          logger.debug(
+            "DBusAuthenticationHandler forwarding \(buffer.readableBytes) bytes to decoder")
           let pass = buffer.readSlice(length: buffer.readableBytes)!
           buffer.discardReadBytes()
           context.fireChannelRead(self.wrapInboundOut(pass))
@@ -247,6 +292,114 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
         buffer.clear()
         context.close(promise: nil)
       }
+    }
+  }
+
+  private func readLine() -> String? {
+    let newline: UInt8 = 10
+    guard let newlineIndex = buffer.readableBytesView.firstIndex(of: newline) else {
+      guard buffer.readableBytes > 0 else { return nil }
+      return buffer.readString(length: buffer.readableBytes)
+    }
+    let length = buffer.readableBytesView.distance(
+      from: buffer.readableBytesView.startIndex,
+      to: newlineIndex
+    )
+    guard var line = buffer.readString(length: length) else { return nil }
+    buffer.moveReaderIndex(forwardBy: 1)
+    if line.hasSuffix("\r") {
+      line.removeLast()
+    }
+    return line
+  }
+
+  private func completeAuthentication(context: ChannelHandlerContext) {
+    let begin = "BEGIN\r\n"
+    let out = context.channel.allocator.buffer(string: begin)
+    context.writeAndFlush(self.wrapOutboundOut(out), promise: nil)
+
+    do {
+      let handler = try context.pipeline.syncOperations.handler(
+        type: ByteToMessageHandler<LineBasedFrameDecoder>.self)
+      _ = context.pipeline.syncOperations.removeHandler(handler)
+      logger.debug("Removed LineBasedFrameDecoder from pipeline")
+
+      for buffer in self.writeBuffer {
+        logger.trace("Flushing buffered write", metadata: ["bytes": "\(buffer.readableBytes)"])
+        context.writeAndFlush(self.wrapOutboundOut(buffer), promise: nil)
+      }
+      self.writeBuffer.removeAll(keepingCapacity: true)
+      self.state = .authenticated
+      logger.debug("D-Bus authentication completed successfully - now in message mode")
+
+      // Check remaining buffered data
+      if buffer.readableBytes > 0 {
+        logger.debug("Processing \(buffer.readableBytes) buffered bytes after auth completion")
+      }
+
+      context.fireChannelActive()
+      context.fireChannelWritabilityChanged()
+      logger.debug("Fired channelActive and channelWritabilityChanged events")
+    } catch {
+      logger.warning(
+        "Failed to complete authentication setup",
+        metadata: [
+          "error": "\(error)"
+        ])
+      context.fireErrorCaught(error)
+    }
+  }
+
+  private func handleRejected(
+    offered: Set<String>?,
+    context: ChannelHandlerContext,
+    rawLine: String
+  ) {
+    if let next = nextMechanism(allowed: offered) {
+      logger.debug(
+        "Authentication rejected by server, retrying",
+        metadata: [
+          "mechanism": "\(next.name)"
+        ])
+      sendAuth(for: next, context: context)
+    } else {
+      let trimmed = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+      logger.debug(
+        "Authentication rejected by server with no supported mechanisms",
+        metadata: [
+          "response": "\(trimmed)"
+        ])
+      state = .failed
+      context.fireErrorCaught(DBusAuthenticationError.invalidAuthCommand)
+    }
+  }
+
+  private func nextMechanism(allowed: Set<String>?) -> DBusAuthMechanism? {
+    while let candidate = pendingMechanisms.first {
+      pendingMechanisms.removeFirst()
+      if let allowed, !allowed.contains(candidate.name) {
+        continue
+      }
+      currentMechanism = candidate
+      return candidate
+    }
+    return nil
+  }
+
+  private func sendAuth(for mechanism: DBusAuthMechanism, context: ChannelHandlerContext) {
+    do {
+      let authLine = try mechanism.authLine()
+      let out = context.channel.allocator.buffer(string: authLine)
+      context.writeAndFlush(self.wrapOutboundOut(out), promise: nil)
+      logger.trace(
+        "Sending authentication command",
+        metadata: [
+          "command": "\(authLine.trimmingCharacters(in: .whitespacesAndNewlines))"
+        ]
+      )
+    } catch {
+      state = .failed
+      context.fireErrorCaught(error)
     }
   }
 
@@ -273,42 +426,25 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
     logger.debug("Starting D-Bus authentication")
 
     // Send initial NUL byte and AUTH command
-    var buf = context.channel.allocator.buffer(capacity: 64)
-    buf.writeInteger(UInt8(0))
-    // Use EXTERNAL with empty UID (for root) or hex-encoded UID for current user
-    // For now, send EXTERNAL with empty (\r\n at end)
-    let auth: String
-
-    switch self.auth.backing {
-    case .anonymous:
-      auth = "AUTH ANONYMOUS\r\n"
-      logger.debug("Using ANONYMOUS authentication")
-    case .external(let userID):
-      let hex = userID.utf8.map { byte in
-        let hexString = String(byte, radix: 16)
-        return hexString.count == 1 ? "0\(hexString)" : hexString
-      }.joined()
-      auth = "AUTH EXTERNAL \(hex)\r\n"
-      logger.debug(
-        "Using EXTERNAL authentication",
-        metadata: [
-          "user-id": "\(userID)"
-        ])
+    var buf = context.channel.allocator.buffer(capacity: max(64, initialBytes.count + 1))
+    if !initialBytes.isEmpty {
+      buf.writeBytes(initialBytes)
     }
-    buf.writeString(auth)
-    logger.trace(
-      "Sending authentication command",
-      metadata: [
-        "command": "\(auth.trimmingCharacters(in: .whitespacesAndNewlines))"
-      ]
-    )
+    buf.writeInteger(UInt8(0))
     context.writeAndFlush(self.wrapOutboundOut(buf), promise: nil)
+
+    guard let mechanism = nextMechanism(allowed: nil) else {
+      state = .failed
+      context.fireErrorCaught(DBusAuthenticationError.invalidAuthCommand)
+      return
+    }
+    sendAuth(for: mechanism, context: context)
   }
 }
 
 /// Errors that can occur during the DBus authentication process
 /// See: https://dbus.freedesktop.org/doc/dbus-specification.html#auth-protocol
-enum DBusAuthenticationError: Error {
+public enum DBusAuthenticationError: Error {
   /// The initial NUL byte was invalid or missing
   case invalidInitialNull
   /// Received an invalid AUTH command response

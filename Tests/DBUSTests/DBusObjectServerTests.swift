@@ -17,8 +17,6 @@ struct DBusObjectServerTests {
     ]
     await server.export(.init(path: "/org/test/Echo", interfaces: [iface]))
 
-    await conn.waitForHandler()
-
     let call = DBusMessage.createMethodCall(
       destination: "org.test",
       path: "/org/test/Echo",
@@ -28,7 +26,7 @@ struct DBusObjectServerTests {
       body: []
     )
 
-    await conn.emit(call)
+    await server.handle(message: call)
     let sent = await conn.sentRequests()
     #expect(sent.count == 1)
     #expect(sent[0].messageType == .methodReturn)
@@ -39,11 +37,47 @@ struct DBusObjectServerTests {
     )
     #expect(sent[0].body.first?.string == "Pong")
   }
+
+  @Test
+  func noReplyExpectedSkipsErrorReplies() async throws {
+    let conn = MockConnection()
+    let logger = Logger(label: "dbus.test.server")
+    let server = DBusObjectServer(connection: conn, logger: logger)
+
+    var iface = DBusObjectServer.Interface(name: "org.test.Echo")
+    iface.methods = [
+      .init(name: "Boom") { _ in
+        throw DBusServerError.failed(reason: "boom")
+      }
+    ]
+    await server.export(.init(path: "/org/test/Echo", interfaces: [iface]))
+
+    let call = DBusMessage.createMethodCall(
+      destination: "org.test",
+      path: "/org/test/Echo",
+      interface: "org.test.Echo",
+      method: "Boom",
+      serial: 2,
+      body: [],
+      flags: [.noReplyExpected]
+    )
+
+    await server.handle(message: call)
+    let sent = await conn.sentRequests()
+    #expect(sent.isEmpty)
+  }
+
+  @Test
+  func unknownPropertyUsesUnknownPropertyErrorName() {
+    #expect(
+      DBusServerError.unknownProperty.errorName
+        == "org.freedesktop.DBus.Error.UnknownProperty"
+    )
+  }
 }
 
 actor MockConnection: DBusServerConnection {
   private var outbound: [DBusRequest] = []
-  private var handler: (@Sendable (DBusMessage) async -> Void)?
 
   func send(_ request: DBusRequest) async throws -> DBusMessage? {
     outbound.append(request)
@@ -51,21 +85,10 @@ actor MockConnection: DBusServerConnection {
   }
 
   func setMessageHandler(_ handler: @escaping @Sendable (DBusMessage) async -> Void) async {
-    self.handler = handler
-  }
-
-  func emit(_ message: DBusMessage) async {
-    guard let handler else { return }
-    await handler(message)
+    // Not used - tests call server.handle(message:) directly
   }
 
   func sentRequests() async -> [DBusRequest] {
     outbound
-  }
-
-  func waitForHandler() async {
-    while handler == nil {
-      await Task.yield()
-    }
   }
 }
