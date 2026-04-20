@@ -1,0 +1,53 @@
+<node>
+  <!--
+    Avahi DBus interface subset for service browsing.
+    Generate canonical XML from a running Avahi daemon with:
+      busctl introspect org.freedesktop.Avahi / org.freedesktop.Avahi.Server
+  -->
+
+  <interface name="org.freedesktop.Avahi.Server">
+    <method name="GetVersionString">
+      <arg name="version" type="s" direction="out"/>
+    </method>
+    <method name="GetState">
+      <arg name="state" type="i" direction="out"/>
+    </method>
+    <!-- Returns the object path of the new browser object. -->
+    <method name="ServiceBrowserNew">
+      <arg name="interface" type="i" direction="in"/>
+      <arg name="protocol" type="i" direction="in"/>
+      <arg name="type" type="s" direction="in"/>
+      <arg name="domain" type="s" direction="in"/>
+      <arg name="flags" type="u" direction="in"/>
+      <arg name="browser" type="o" direction="out"/>
+    </method>
+  </interface>
+
+  <interface name="org.freedesktop.Avahi.ServiceBrowser">
+    <!-- A service appeared on the network. -->
+    <signal name="ItemNew">
+      <arg name="interface" type="i"/>
+      <arg name="protocol" type="i"/>
+      <arg name="name" type="s"/>
+      <arg name="type" type="s"/>
+      <arg name="domain" type="s"/>
+      <arg name="flags" type="u"/>
+    </signal>
+    <!-- A service disappeared from the network. -->
+    <signal name="ItemRemove">
+      <arg name="interface" type="i"/>
+      <arg name="protocol" type="i"/>
+      <arg name="name" type="s"/>
+      <arg name="type" type="s"/>
+      <arg name="domain" type="s"/>
+      <arg name="flags" type="u"/>
+    </signal>
+    <!-- Initial browse pass is complete; existing services have been reported. -->
+    <signal name="AllForNow">
+    </signal>
+    <!-- The browser encountered a fatal error. -->
+    <signal name="Failure">
+      <arg name="error" type="s"/>
+    </signal>
+  </interface>
+</node>

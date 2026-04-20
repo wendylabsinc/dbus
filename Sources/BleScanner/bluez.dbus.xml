@@ -1,0 +1,45 @@
+<node>
+  <!--
+    BlueZ DBus interfaces for BLE device scanning.
+    Generate fresh introspection XML from a running system with:
+      busctl introspect org.bluez /org/bluez/hci0
+      busctl introspect org.bluez /
+  -->
+
+  <!-- Bluetooth adapter, typically at /org/bluez/hci0 on org.bluez -->
+  <interface name="org.bluez.Adapter1">
+    <method name="StartDiscovery"/>
+    <method name="StopDiscovery"/>
+    <!-- Filter by UUIDs, transport, etc. Pass empty dict {} for no filter. -->
+    <method name="SetDiscoveryFilter">
+      <arg name="properties" type="a{sv}" direction="in"/>
+    </method>
+    <property name="Address"    type="s" access="read"/>
+    <property name="Name"       type="s" access="read"/>
+    <property name="Powered"    type="b" access="readwrite"/>
+    <property name="Discovering" type="b" access="read"/>
+  </interface>
+
+  <!--
+    Standard D-Bus ObjectManager — BlueZ exposes all adapters, devices,
+    services, and characteristics as managed objects at path '/'.
+
+    GetManagedObjects returns a{oa{sa{sv}}} which the codegen maps to
+    DBusValue; decode it manually (see BleScanner.swift).
+  -->
+  <interface name="org.freedesktop.DBus.ObjectManager">
+    <method name="GetManagedObjects">
+      <arg name="objects" type="a{oa{sa{sv}}}" direction="out"/>
+    </method>
+    <!-- Fired when a new device or service object appears (e.g. during scan). -->
+    <signal name="InterfacesAdded">
+      <arg name="objectPath" type="o"/>
+      <arg name="interfaces" type="a{sa{sv}}"/>
+    </signal>
+    <!-- Fired when an object is removed (e.g. device unpaired). -->
+    <signal name="InterfacesRemoved">
+      <arg name="objectPath" type="o"/>
+      <arg name="interfaces" type="as"/>
+    </signal>
+  </interface>
+</node>
