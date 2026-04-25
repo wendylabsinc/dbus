@@ -1,7 +1,6 @@
-#if canImport(FoundationEssentials)
-  import FoundationEssentials
-#elseif canImport(Foundation)
-  import Foundation
+import Foundation
+#if canImport(FoundationXML)
+  import FoundationXML
 #endif
 
 public enum DBusParserError: Error {

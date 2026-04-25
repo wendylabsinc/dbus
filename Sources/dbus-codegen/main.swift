@@ -1,13 +1,17 @@
-#if canImport(FoundationEssentials)
-  import FoundationEssentials
-#elseif canImport(Foundation)
-  import Foundation
+import DBusCodegen
+import Foundation
+
+#if canImport(Darwin)
+  import Darwin
+#elseif canImport(Glibc)
+  import Glibc
+#elseif canImport(Musl)
+  import Musl
 #endif
 
-import DBusCodegen
-
 func printUsage() {
-  print("""
+  print(
+    """
     Usage: dbus-codegen [--output-dir <dir>] [--module-name <name>] <file.dbus.xml> ...
 
     Options:

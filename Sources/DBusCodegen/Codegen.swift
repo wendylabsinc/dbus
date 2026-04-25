@@ -44,10 +44,14 @@ public enum Codegen {
       }
       for property in interface.properties {
         if property.access == .read || property.access == .readWrite {
-          w.writeLine("var \(TypeMapper.swiftIdentifier(property.name)): \(TypeMapper.swiftType(for: property.type)) { get async throws }")
+          w.writeLine(
+            "var \(TypeMapper.swiftIdentifier(property.name)): \(TypeMapper.swiftType(for: property.type)) { get async throws }"
+          )
         }
         if property.access == .readWrite || property.access == .write {
-          w.writeLine("func set\(property.name)(_ newValue: \(TypeMapper.swiftType(for: property.type))) async throws")
+          w.writeLine(
+            "func set\(property.name)(_ newValue: \(TypeMapper.swiftType(for: property.type))) async throws"
+          )
         }
       }
       SignalGenerator.generateProtocolMembers(interface: interface, into: &w)
@@ -62,7 +66,8 @@ public enum Codegen {
       w.writeLine("private let destination: String")
       w.writeLine("private let path: String")
       w.writeLine()
-      w.writeLine("public init(connection: DBusClient.Connection, destination: String, path: String) {")
+      w.writeLine(
+        "public init(connection: DBusClient.Connection, destination: String, path: String) {")
       w.indent { w2 in
         w2.writeLine("self.connection = connection")
         w2.writeLine("self.destination = destination")

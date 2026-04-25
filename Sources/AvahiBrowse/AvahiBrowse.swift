@@ -1,3 +1,7 @@
+import DBUS
+import Logging
+import NIOCore
+
 #if canImport(Glibc)
   import Glibc
 #elseif canImport(Darwin)
@@ -5,9 +9,6 @@
 #elseif canImport(Musl)
   import Musl
 #endif
-import DBUS
-import Logging
-import NIOCore
 
 // avahi.dbus.swift is auto-generated from avahi.dbus.xml by DBusCodegenPlugin.
 // It provides: OrgFreedesktopAvahiServerProxy, OrgFreedesktopAvahiServiceBrowserProxy

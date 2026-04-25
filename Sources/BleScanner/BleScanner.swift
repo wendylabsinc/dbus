@@ -1,3 +1,7 @@
+import DBUS
+import Logging
+import NIOCore
+
 #if canImport(Glibc)
   import Glibc
 #elseif canImport(Darwin)
@@ -5,9 +9,6 @@
 #elseif canImport(Musl)
   import Musl
 #endif
-import DBUS
-import Logging
-import NIOCore
 
 // bluez.dbus.swift is generated from bluez.dbus.xml by DBusCodegenPlugin.
 // It provides: OrgBluezAdapter1Proxy, OrgFreedesktopDBusObjectManagerProxy
@@ -69,8 +70,11 @@ struct BleScanner {
       await withTaskGroup(of: Void.self) { group in
         group.addTask {
           for await event in appeared {
-            guard let dev = device(path: event.objectPath, interfaces: event.interfaces) else { continue }
-            print("  +", terminator: " "); printDevice(dev)
+            guard let dev = device(path: event.objectPath, interfaces: event.interfaces) else {
+              continue
+            }
+            print("  +", terminator: " ")
+            printDevice(dev)
           }
         }
         group.addTask {
@@ -118,9 +122,9 @@ func devices(in value: DBusValue) -> [DeviceInfo] {
 /// Try to build a DeviceInfo from a single InterfacesAdded event payload.
 func device(path: String, interfaces: DBusValue) -> DeviceInfo? {
   guard path.contains("/dev_"),
-        case .dictionary(let ifaces) = interfaces,
-        let propsVal = ifaces[.string("org.bluez.Device1")],
-        case .dictionary(let props) = propsVal
+    case .dictionary(let ifaces) = interfaces,
+    let propsVal = ifaces[.string("org.bluez.Device1")],
+    case .dictionary(let props) = propsVal
   else { return nil }
   return DeviceInfo(
     path: path,
@@ -139,12 +143,14 @@ func device(path: DBusValue, interfaces: DBusValue) -> DeviceInfo? {
 
 func variantString(_ props: [DBusValue: DBusValue], _ key: String) -> String? {
   guard case .variant(let v) = props[.string(key)],
-        case .string(let s) = v.value else { return nil }
+    case .string(let s) = v.value
+  else { return nil }
   return s
 }
 
 func variantInt16(_ props: [DBusValue: DBusValue], _ key: String) -> Int16? {
   guard case .variant(let v) = props[.string(key)],
-        case .int16(let n) = v.value else { return nil }
+    case .int16(let n) = v.value
+  else { return nil }
   return n
 }

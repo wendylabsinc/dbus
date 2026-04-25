@@ -1,8 +1,8 @@
 // Placeholder types referenced by generated code and TypeMapper.
 // These represent DBus wire types that generated code uses at runtime.
 
-public typealias DBusVariant = DBusValue
-public typealias DBusValue = Any
+typealias DBusVariant = DBusValue
+typealias DBusValue = Any
 
 public enum DBusCodegenError: Error, Sendable {
   case typeMismatch

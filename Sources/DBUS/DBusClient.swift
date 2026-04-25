@@ -53,12 +53,13 @@ public actor DBusClient: Sendable {
     let logger: Logger
     private var continuations: [UInt32: AsyncThrowingStream<DBusMessage, Error>.Continuation] = [:]
     private var messageHandler: (@Sendable (DBusMessage) async -> Void)?
-    private var signalSubscribers: [(
-      id: UInt64,
-      interface: String,
-      member: String,
-      continuation: AsyncStream<DBusMessage>.Continuation
-    )] = []
+    private var signalSubscribers:
+      [(
+        id: UInt64,
+        interface: String,
+        member: String,
+        continuation: AsyncStream<DBusMessage>.Continuation
+      )] = []
     private var nextSignalSubscriberId: UInt64 = 0
 
     internal init(send: Send, logger: Logger) {
@@ -220,7 +221,8 @@ public actor DBusClient: Sendable {
       let stream = AsyncStream<DBusMessage> { continuation in
         storedContinuation = continuation
       }
-      signalSubscribers.append((id: id, interface: interface, member: member, continuation: storedContinuation))
+      signalSubscribers.append(
+        (id: id, interface: interface, member: member, continuation: storedContinuation))
       storedContinuation.onTermination = { [weak self] _ in
         Task { [weak self] in await self?.removeSignalSubscriber(id: id) }
       }

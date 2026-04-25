@@ -54,7 +54,9 @@ public struct DBusInterface: Sendable, Equatable {
   public var properties: [DBusProperty]
   public var signals: [DBusSignal]
 
-  public init(name: String, methods: [DBusMethod], properties: [DBusProperty], signals: [DBusSignal]) {
+  public init(
+    name: String, methods: [DBusMethod], properties: [DBusProperty], signals: [DBusSignal]
+  ) {
     self.name = name
     self.methods = methods
     self.properties = properties

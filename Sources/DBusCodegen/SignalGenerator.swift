@@ -1,13 +1,21 @@
 public enum SignalGenerator {
-  public static func generateProtocolMembers(interface: DBusInterface, into writer: inout CodeWriter) {
+  public static func generateProtocolMembers(
+    interface: DBusInterface, into writer: inout CodeWriter
+  ) {
     for signal in interface.signals {
-      writer.writeLine("func \(TypeMapper.swiftIdentifier(signal.name))() async throws -> \(streamType(for: signal))")
+      writer.writeLine(
+        "func \(TypeMapper.swiftIdentifier(signal.name))() async throws -> \(streamType(for: signal))"
+      )
     }
   }
 
-  public static func generateProxyImplementations(interface: DBusInterface, into writer: inout CodeWriter) {
+  public static func generateProxyImplementations(
+    interface: DBusInterface, into writer: inout CodeWriter
+  ) {
     for signal in interface.signals {
-      writer.writeLine("public func \(TypeMapper.swiftIdentifier(signal.name))() async throws -> \(streamType(for: signal)) {")
+      writer.writeLine(
+        "public func \(TypeMapper.swiftIdentifier(signal.name))() async throws -> \(streamType(for: signal)) {"
+      )
       writer.indent { w in
         let matchRule = "type='signal',interface='\(interface.name)',member='\(signal.name)'"
         w.writeLine("_ = try await connection.send(DBusRequest.createMethodCall(")
@@ -19,7 +27,9 @@ public enum SignalGenerator {
           w2.writeLine("body: [.string(\"\(matchRule)\")]")
         }
         w.writeLine("))")
-        w.writeLine("let rawStream = await connection.subscribeToSignal(interface: \"\(interface.name)\", member: \"\(signal.name)\")")
+        w.writeLine(
+          "let rawStream = await connection.subscribeToSignal(interface: \"\(interface.name)\", member: \"\(signal.name)\")"
+        )
 
         if signal.args.isEmpty {
           w.writeLine("return AsyncStream<Void> { continuation in")
@@ -44,7 +54,8 @@ public enum SignalGenerator {
                 w4.writeLine("guard message.body.count >= \(signal.args.count) else { continue }")
                 for (i, arg) in signal.args.enumerated() {
                   let varName = "_sig\(i)"
-                  let decode = inlineDecode(src: "message.body[\(i)]", signature: arg.type, varName: varName)
+                  let decode = inlineDecode(
+                    src: "message.body[\(i)]", signature: arg.type, varName: varName)
                   w4.writeLine("guard let \(varName) = \(decode) else { continue }")
                 }
                 if signal.args.count == 1 {
@@ -87,22 +98,41 @@ public enum SignalGenerator {
 
   private static func inlineDecode(src: String, signature: String, varName: String) -> String {
     switch signature {
-    case "y": return "{ () -> UInt8?     in if case .byte(let v)      = \(src) { return v }; return nil }()"
-    case "b": return "{ () -> Bool?      in if case .boolean(let v)   = \(src) { return v }; return nil }()"
-    case "n": return "{ () -> Int16?     in if case .int16(let v)     = \(src) { return v }; return nil }()"
-    case "q": return "{ () -> UInt16?    in if case .uint16(let v)    = \(src) { return v }; return nil }()"
-    case "i": return "{ () -> Int32?     in if case .int32(let v)     = \(src) { return v }; return nil }()"
-    case "u": return "{ () -> UInt32?    in if case .uint32(let v)    = \(src) { return v }; return nil }()"
-    case "x": return "{ () -> Int64?     in if case .int64(let v)     = \(src) { return v }; return nil }()"
-    case "t": return "{ () -> UInt64?    in if case .uint64(let v)    = \(src) { return v }; return nil }()"
-    case "d": return "{ () -> Double?    in if case .double(let v)    = \(src) { return v }; return nil }()"
-    case "s": return "{ () -> String?    in if case .string(let v)    = \(src) { return v }; return nil }()"
-    case "o": return "{ () -> String?    in if case .objectPath(let v) = \(src) { return v }; return nil }()"
-    case "g": return "{ () -> String?    in if case .signature(let v) = \(src) { return v }; return nil }()"
-    case "h": return "{ () -> UInt32?    in if case .unixFd(let v)    = \(src) { return v }; return nil }()"
-    case "v": return "{ () -> DBusVariant? in if case .variant(let v) = \(src) { return v }; return nil }()"
-    case "ay": return "{ () -> [UInt8]?  in guard case .array(let _a) = \(src) else { return nil }; return _a.compactMap { if case .byte(let b) = $0 { return b }; return nil } }()"
-    case "as": return "{ () -> [String]? in guard case .array(let _a) = \(src) else { return nil }; return _a.compactMap { if case .string(let s) = $0 { return s }; return nil } }()"
+    case "y":
+      return "{ () -> UInt8?     in if case .byte(let v)      = \(src) { return v }; return nil }()"
+    case "b":
+      return "{ () -> Bool?      in if case .boolean(let v)   = \(src) { return v }; return nil }()"
+    case "n":
+      return "{ () -> Int16?     in if case .int16(let v)     = \(src) { return v }; return nil }()"
+    case "q":
+      return "{ () -> UInt16?    in if case .uint16(let v)    = \(src) { return v }; return nil }()"
+    case "i":
+      return "{ () -> Int32?     in if case .int32(let v)     = \(src) { return v }; return nil }()"
+    case "u":
+      return "{ () -> UInt32?    in if case .uint32(let v)    = \(src) { return v }; return nil }()"
+    case "x":
+      return "{ () -> Int64?     in if case .int64(let v)     = \(src) { return v }; return nil }()"
+    case "t":
+      return "{ () -> UInt64?    in if case .uint64(let v)    = \(src) { return v }; return nil }()"
+    case "d":
+      return "{ () -> Double?    in if case .double(let v)    = \(src) { return v }; return nil }()"
+    case "s":
+      return "{ () -> String?    in if case .string(let v)    = \(src) { return v }; return nil }()"
+    case "o":
+      return
+        "{ () -> String?    in if case .objectPath(let v) = \(src) { return v }; return nil }()"
+    case "g":
+      return "{ () -> String?    in if case .signature(let v) = \(src) { return v }; return nil }()"
+    case "h":
+      return "{ () -> UInt32?    in if case .unixFd(let v)    = \(src) { return v }; return nil }()"
+    case "v":
+      return "{ () -> DBusVariant? in if case .variant(let v) = \(src) { return v }; return nil }()"
+    case "ay":
+      return
+        "{ () -> [UInt8]?  in guard case .array(let _a) = \(src) else { return nil }; return _a.compactMap { if case .byte(let b) = $0 { return b }; return nil } }()"
+    case "as":
+      return
+        "{ () -> [String]? in guard case .array(let _a) = \(src) else { return nil }; return _a.compactMap { if case .string(let s) = $0 { return s }; return nil } }()"
     default: return "Optional(\(src))"
     }
   }

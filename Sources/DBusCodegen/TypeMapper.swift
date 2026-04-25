@@ -40,45 +40,91 @@ public enum TypeMapper {
     case "ay": return ".array(\(name).map { .byte($0) })"
     case "as": return ".array(\(name).map { .string($0) })"
     case "a{sv}":
-      return ".dictionary(Dictionary(uniqueKeysWithValues: \(name).map { (.string($0.key), .variant($0.value)) }))"
+      return
+        ".dictionary(Dictionary(uniqueKeysWithValues: \(name).map { (.string($0.key), .variant($0.value)) }))"
     case "a{ss}":
-      return ".dictionary(Dictionary(uniqueKeysWithValues: \(name).map { (.string($0.key), .string($0.value)) }))"
+      return
+        ".dictionary(Dictionary(uniqueKeysWithValues: \(name).map { (.string($0.key), .string($0.value)) }))"
     default: return name
     }
   }
 
-  public static func decodeLines(_ index: Int, signature: String) -> [String] {
-    let src = "reply.body[\(index)]"
+  public static func decodeLines(
+    _ index: Int, signature: String, sourceExpr: String? = nil
+  ) -> [String] {
+    let src = sourceExpr ?? "reply.body[\(index)]"
     let v = "_v\(index)"
     switch signature {
     case "y":
-      return ["guard case .byte(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }", "return \(v)"]
+      return [
+        "guard case .byte(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }",
+        "return \(v)",
+      ]
     case "b":
-      return ["guard case .boolean(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }", "return \(v)"]
+      return [
+        "guard case .boolean(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }",
+        "return \(v)",
+      ]
     case "n":
-      return ["guard case .int16(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }", "return \(v)"]
+      return [
+        "guard case .int16(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }",
+        "return \(v)",
+      ]
     case "q":
-      return ["guard case .uint16(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }", "return \(v)"]
+      return [
+        "guard case .uint16(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }",
+        "return \(v)",
+      ]
     case "i":
-      return ["guard case .int32(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }", "return \(v)"]
+      return [
+        "guard case .int32(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }",
+        "return \(v)",
+      ]
     case "u":
-      return ["guard case .uint32(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }", "return \(v)"]
+      return [
+        "guard case .uint32(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }",
+        "return \(v)",
+      ]
     case "x":
-      return ["guard case .int64(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }", "return \(v)"]
+      return [
+        "guard case .int64(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }",
+        "return \(v)",
+      ]
     case "t":
-      return ["guard case .uint64(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }", "return \(v)"]
+      return [
+        "guard case .uint64(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }",
+        "return \(v)",
+      ]
     case "d":
-      return ["guard case .double(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }", "return \(v)"]
+      return [
+        "guard case .double(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }",
+        "return \(v)",
+      ]
     case "s":
-      return ["guard case .string(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }", "return \(v)"]
+      return [
+        "guard case .string(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }",
+        "return \(v)",
+      ]
     case "o":
-      return ["guard case .objectPath(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }", "return \(v)"]
+      return [
+        "guard case .objectPath(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }",
+        "return \(v)",
+      ]
     case "g":
-      return ["guard case .signature(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }", "return \(v)"]
+      return [
+        "guard case .signature(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }",
+        "return \(v)",
+      ]
     case "h":
-      return ["guard case .unixFd(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }", "return \(v)"]
+      return [
+        "guard case .unixFd(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }",
+        "return \(v)",
+      ]
     case "v":
-      return ["guard case .variant(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }", "return \(v)"]
+      return [
+        "guard case .variant(let \(v)) = \(src) else { throw DBusCodegenError.typeMismatch }",
+        "return \(v)",
+      ]
     case "ay":
       let arr = "_arr\(index)"
       return [
@@ -117,9 +163,11 @@ public enum TypeMapper {
   public static func decodeVariantLines(_ index: Int, signature: String) -> [String] {
     let src = "reply.body[\(index)]"
     let variantVar = "_variant\(index)"
-    let inner = TypeMapper.decodeLines(index, signature: signature)
-      .map { $0.replacingOccurrences(of: src, with: "\(variantVar).value") }
-    return ["guard case .variant(let \(variantVar)) = \(src) else { throw DBusCodegenError.typeMismatch }"] + inner
+    let inner = TypeMapper.decodeLines(
+      index, signature: signature, sourceExpr: "\(variantVar).value")
+    return [
+      "guard case .variant(let \(variantVar)) = \(src) else { throw DBusCodegenError.typeMismatch }"
+    ] + inner
   }
 
   public static func interfacePrefix(_ interfaceName: String) -> String {

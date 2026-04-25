@@ -10,10 +10,14 @@ public enum ServerGenerator {
       }
       for property in interface.properties {
         if property.access == .read || property.access == .readWrite {
-          w.writeLine("var \(TypeMapper.lowerCamelCase(property.name)): \(TypeMapper.swiftType(for: property.type)) { get async throws }")
+          w.writeLine(
+            "var \(TypeMapper.lowerCamelCase(property.name)): \(TypeMapper.swiftType(for: property.type)) { get async throws }"
+          )
         }
         if property.access == .write || property.access == .readWrite {
-          w.writeLine("func set\(property.name)(_ newValue: \(TypeMapper.swiftType(for: property.type))) async throws")
+          w.writeLine(
+            "func set\(property.name)(_ newValue: \(TypeMapper.swiftType(for: property.type))) async throws"
+          )
         }
       }
     }
@@ -68,11 +72,21 @@ public enum ServerGenerator {
   }
 
   private static func generateMethodBridge(_ method: DBusMethod, into writer: inout CodeWriter) {
-    let inArgDecls = method.inArgs.isEmpty ? "[]" :
-      "[" + method.inArgs.map { ".init(name: \"\($0.name)\", type: \"\($0.type)\")" }.joined(separator: ", ") + "]"
-    let outArgDecls = method.outArgs.isEmpty ? "[]" :
-      "[" + method.outArgs.map { ".init(name: \"\($0.name)\", type: \"\($0.type)\")" }.joined(separator: ", ") + "]"
-    writer.writeLine(".init(name: \"\(method.name)\", inputArgs: \(inArgDecls), outputArgs: \(outArgDecls)) { [self] ctx in")
+    let inArgDecls =
+      method.inArgs.isEmpty
+      ? "[]"
+      : "["
+        + method.inArgs.map { ".init(name: \"\($0.name)\", type: \"\($0.type)\")" }.joined(
+          separator: ", ") + "]"
+    let outArgDecls =
+      method.outArgs.isEmpty
+      ? "[]"
+      : "["
+        + method.outArgs.map { ".init(name: \"\($0.name)\", type: \"\($0.type)\")" }.joined(
+          separator: ", ") + "]"
+    writer.writeLine(
+      ".init(name: \"\(method.name)\", inputArgs: \(inArgDecls), outputArgs: \(outArgDecls)) { [self] ctx in"
+    )
     writer.indent { w in
       // Decode in-args
       for (i, arg) in method.inArgs.enumerated() {
@@ -100,7 +114,8 @@ public enum ServerGenerator {
       } else {
         w.writeLine("let result = \(handlerCall)")
         let encoded = method.outArgs.map { arg in
-          TypeMapper.encodeExpression("result.\(TypeMapper.swiftIdentifier(arg.name))", signature: arg.type)
+          TypeMapper.encodeExpression(
+            "result.\(TypeMapper.swiftIdentifier(arg.name))", signature: arg.type)
         }.joined(separator: ", ")
         w.writeLine("return [\(encoded)]")
       }
@@ -108,7 +123,9 @@ public enum ServerGenerator {
     writer.writeLine("},")
   }
 
-  private static func generatePropertyBridge(_ property: DBusProperty, into writer: inout CodeWriter) {
+  private static func generatePropertyBridge(
+    _ property: DBusProperty, into writer: inout CodeWriter
+  ) {
     let propName = TypeMapper.swiftIdentifier(property.name)
     let access: String
     switch property.access {
@@ -123,23 +140,30 @@ public enum ServerGenerator {
     if !hasSetter {
       let getterCode: String
       if hasGetter {
-        let encoded = TypeMapper.encodeExpression("try await self.\(propName)", signature: property.type)
+        let encoded = TypeMapper.encodeExpression(
+          "try await self.\(propName)", signature: property.type)
         getterCode = "{ [self] _ in \(encoded) }"
       } else {
         getterCode = "{ _ in DBusValue.boolean(false) }"
       }
-      writer.writeLine(".init(name: \"\(property.name)\", signature: \"\(property.type)\", access: \(access), get: \(getterCode)),")
+      writer.writeLine(
+        ".init(name: \"\(property.name)\", signature: \"\(property.type)\", access: \(access), get: \(getterCode)),"
+      )
     } else {
       let getterCode: String
       if hasGetter {
-        let encoded = TypeMapper.encodeExpression("try await self.\(propName)", signature: property.type)
+        let encoded = TypeMapper.encodeExpression(
+          "try await self.\(propName)", signature: property.type)
         getterCode = "{ [self] _ in \(encoded) }"
       } else {
         getterCode = "{ _ in DBusValue.boolean(false) }"
       }
-      writer.writeLine(".init(name: \"\(property.name)\", signature: \"\(property.type)\", access: \(access), get: \(getterCode), set: { [self] _newVal, _ in")
+      writer.writeLine(
+        ".init(name: \"\(property.name)\", signature: \"\(property.type)\", access: \(access), get: \(getterCode), set: { [self] _newVal, _ in"
+      )
       writer.indent { w in
-        let decodeLines = inlineDecodeLines(src: "_newVal", signature: property.type, resultName: "_decoded")
+        let decodeLines = inlineDecodeLines(
+          src: "_newVal", signature: property.type, resultName: "_decoded")
         w.writeLines(decodeLines)
         w.writeLine("try await self.set\(property.name)(_decoded)")
       }
@@ -148,36 +172,66 @@ public enum ServerGenerator {
   }
 
   /// Returns lines that decode a DBusValue variable named `src` into a Swift `let` binding named `resultName`.
-  private static func inlineDecodeLines(src: String, signature: String, resultName: String) -> [String] {
+  private static func inlineDecodeLines(src: String, signature: String, resultName: String)
+    -> [String]
+  {
     switch signature {
     case "y":
-      return ["guard case .byte(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"]
+      return [
+        "guard case .byte(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"
+      ]
     case "b":
-      return ["guard case .boolean(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"]
+      return [
+        "guard case .boolean(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"
+      ]
     case "n":
-      return ["guard case .int16(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"]
+      return [
+        "guard case .int16(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"
+      ]
     case "q":
-      return ["guard case .uint16(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"]
+      return [
+        "guard case .uint16(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"
+      ]
     case "i":
-      return ["guard case .int32(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"]
+      return [
+        "guard case .int32(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"
+      ]
     case "u":
-      return ["guard case .uint32(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"]
+      return [
+        "guard case .uint32(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"
+      ]
     case "x":
-      return ["guard case .int64(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"]
+      return [
+        "guard case .int64(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"
+      ]
     case "t":
-      return ["guard case .uint64(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"]
+      return [
+        "guard case .uint64(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"
+      ]
     case "d":
-      return ["guard case .double(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"]
+      return [
+        "guard case .double(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"
+      ]
     case "s":
-      return ["guard case .string(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"]
+      return [
+        "guard case .string(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"
+      ]
     case "o":
-      return ["guard case .objectPath(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"]
+      return [
+        "guard case .objectPath(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"
+      ]
     case "g":
-      return ["guard case .signature(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"]
+      return [
+        "guard case .signature(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"
+      ]
     case "h":
-      return ["guard case .unixFd(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"]
+      return [
+        "guard case .unixFd(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"
+      ]
     case "v":
-      return ["guard case .variant(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"]
+      return [
+        "guard case .variant(let \(resultName)) = \(src) else { throw DBusCodegenError.typeMismatch }"
+      ]
     case "ay":
       let tmp = "_arr_\(resultName)"
       return [

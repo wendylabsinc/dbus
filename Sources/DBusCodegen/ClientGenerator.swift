@@ -41,7 +41,8 @@ public enum ClientGenerator {
       w.writeLine("private let destination: String")
       w.writeLine("private let path: String")
       w.writeLine()
-      w.writeLine("public init(connection: DBusClient.Connection, destination: String, path: String) {")
+      w.writeLine(
+        "public init(connection: DBusClient.Connection, destination: String, path: String) {")
       w.indent { wi in
         wi.writeLine("self.connection = connection")
         wi.writeLine("self.destination = destination")
@@ -66,7 +67,9 @@ public enum ClientGenerator {
 
   // MARK: - Internal helpers (used by Codegen.swift)
 
-  internal static func generateMethodImpl(_ method: DBusMethod, interfaceName: String, into writer: inout CodeWriter) {
+  internal static func generateMethodImpl(
+    _ method: DBusMethod, interfaceName: String, into writer: inout CodeWriter
+  ) {
     let methodName = TypeMapper.swiftIdentifier(method.name)
     let params = method.inArgs
       .map { "\(TypeMapper.swiftIdentifier($0.name)): \(TypeMapper.swiftType(for: $0.type))" }
@@ -83,7 +86,9 @@ public enum ClientGenerator {
     writer.indent { wi in
       // Build body array
       let bodyEntries = method.inArgs
-        .map { TypeMapper.encodeExpression(TypeMapper.swiftIdentifier($0.name), signature: $0.type) }
+        .map {
+          TypeMapper.encodeExpression(TypeMapper.swiftIdentifier($0.name), signature: $0.type)
+        }
       let bodyStr = bodyEntries.isEmpty ? "[]" : "[\(bodyEntries.joined(separator: ", "))]"
 
       wi.writeLine("let request = DBusRequest.createMethodCall(")
@@ -99,7 +104,9 @@ public enum ClientGenerator {
       if isVoid {
         wi.writeLine("_ = try await connection.send(request)")
       } else if isMultiOut {
-        wi.writeLine("guard let reply = try await connection.send(request) else { throw DBusError.missingReply }")
+        wi.writeLine(
+          "guard let reply = try await connection.send(request) else { throw DBusError.missingReply }"
+        )
         for (i, arg) in method.outArgs.enumerated() {
           let argName = TypeMapper.swiftIdentifier(arg.name)
           let lines = TypeMapper.decodeLines(i, signature: arg.type)
@@ -123,7 +130,9 @@ public enum ClientGenerator {
         }.joined(separator: ", ")
         wi.writeLine("return (\(tupleElems))")
       } else {
-        wi.writeLine("guard let reply = try await connection.send(request) else { throw DBusError.missingReply }")
+        wi.writeLine(
+          "guard let reply = try await connection.send(request) else { throw DBusError.missingReply }"
+        )
         let lines = TypeMapper.decodeLines(0, signature: method.outArgs[0].type)
         wi.writeLines(lines)
       }
@@ -131,7 +140,9 @@ public enum ClientGenerator {
     writer.writeLine("}")
   }
 
-  internal static func generatePropertyImpl(_ prop: DBusProperty, interfaceName: String, into writer: inout CodeWriter) {
+  internal static func generatePropertyImpl(
+    _ prop: DBusProperty, interfaceName: String, into writer: inout CodeWriter
+  ) {
     let propName = TypeMapper.swiftIdentifier(prop.name)
     let swiftType = TypeMapper.swiftType(for: prop.type)
 
@@ -149,7 +160,9 @@ public enum ClientGenerator {
             wiii.writeLine("body: [.string(\"\(interfaceName)\"), .string(\"\(prop.name)\")]")
           }
           wii.writeLine(")")
-          wii.writeLine("guard let reply = try await connection.send(request) else { throw DBusError.missingReply }")
+          wii.writeLine(
+            "guard let reply = try await connection.send(request) else { throw DBusError.missingReply }"
+          )
           let lines = TypeMapper.decodeVariantLines(0, signature: prop.type)
           wii.writeLines(lines)
         }
@@ -170,7 +183,9 @@ public enum ClientGenerator {
           wii.writeLine("path: path,")
           wii.writeLine("interface: \"org.freedesktop.DBus.Properties\",")
           wii.writeLine("method: \"Set\",")
-          wii.writeLine("body: [.string(\"\(interfaceName)\"), .string(\"\(prop.name)\"), .variant(DBusVariant(\(encExpr)))]")
+          wii.writeLine(
+            "body: [.string(\"\(interfaceName)\"), .string(\"\(prop.name)\"), .variant(DBusVariant(\(encExpr)))]"
+          )
         }
         wi.writeLine(")")
         wi.writeLine("_ = try await connection.send(request)")
@@ -189,7 +204,9 @@ public enum ClientGenerator {
     case 1:
       return TypeMapper.swiftType(for: outArgs[0].type)
     default:
-      let parts = outArgs.map { "\(TypeMapper.swiftIdentifier($0.name)): \(TypeMapper.swiftType(for: $0.type))" }
+      let parts = outArgs.map {
+        "\(TypeMapper.swiftIdentifier($0.name)): \(TypeMapper.swiftType(for: $0.type))"
+      }
       return "(\(parts.joined(separator: ", ")))"
     }
   }
