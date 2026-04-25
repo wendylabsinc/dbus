@@ -63,16 +63,18 @@ struct TypeMapperTests {
 
   @Test func decodeSimpleType() {
     let lines = TypeMapper.decodeLines(0, signature: "s")
-    #expect(lines.count == 2)
-    #expect(lines[0].contains("guard case .string"))
-    #expect(lines[1] == "return _v0")
+    #expect(lines.count == 3)
+    #expect(lines[0].contains("reply.body.indices.contains(0)"))
+    #expect(lines[1].contains("guard case .string"))
+    #expect(lines[2] == "return _v0")
   }
 
   @Test func decodeArrayOfBytes() {
     let lines = TypeMapper.decodeLines(0, signature: "ay")
-    #expect(lines.count == 2)
-    #expect(lines[0].contains("guard case .array"))
-    #expect(lines[1].contains(".byte"))
+    #expect(lines.count == 3)
+    #expect(lines[0].contains("reply.body.indices.contains(0)"))
+    #expect(lines[1].contains("guard case .array"))
+    #expect(lines[2].contains(".byte"))
   }
 
   @Test func decodeVariantLines() {
