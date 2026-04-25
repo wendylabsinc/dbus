@@ -8,3 +8,4 @@ DerivedData/
 .swiftpm
 .edge-build
 ExampleApp-container.tar
+.worktrees/
