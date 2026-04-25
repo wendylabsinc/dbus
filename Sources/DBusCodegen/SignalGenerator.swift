@@ -129,10 +129,16 @@ public enum SignalGenerator {
       return "{ () -> DBusVariant? in if case .variant(let v) = \(src) { return v }; return nil }()"
     case "ay":
       return
-        "{ () -> [UInt8]?  in guard case .array(let _a) = \(src) else { return nil }; return _a.compactMap { if case .byte(let b) = $0 { return b }; return nil } }()"
+        "{ () -> [UInt8]? in guard case .array(let _a) = \(src) else { return nil }; var _r: [UInt8] = []; for _e in _a { guard case .byte(let b) = _e else { return nil }; _r.append(b) }; return _r }()"
     case "as":
       return
-        "{ () -> [String]? in guard case .array(let _a) = \(src) else { return nil }; return _a.compactMap { if case .string(let s) = $0 { return s }; return nil } }()"
+        "{ () -> [String]? in guard case .array(let _a) = \(src) else { return nil }; var _r: [String] = []; for _e in _a { guard case .string(let s) = _e else { return nil }; _r.append(s) }; return _r }()"
+    case "a{sv}":
+      return
+        "{ () -> [String: DBusVariant]? in guard case .dictionary(let _d) = \(src) else { return nil }; var _r: [String: DBusVariant] = [:]; for (k, v) in _d { guard case .string(let key) = k, case .variant(let val) = v else { return nil }; _r[key] = val }; return _r }()"
+    case "a{ss}":
+      return
+        "{ () -> [String: String]? in guard case .dictionary(let _d) = \(src) else { return nil }; var _r: [String: String] = [:]; for (k, v) in _d { guard case .string(let key) = k, case .string(let val) = v else { return nil }; _r[key] = val }; return _r }()"
     default: return "Optional(\(src))"
     }
   }

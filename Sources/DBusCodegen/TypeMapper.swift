@@ -53,6 +53,14 @@ public enum TypeMapper {
     _ index: Int, signature: String, sourceExpr: String? = nil
   ) -> [String] {
     let src = sourceExpr ?? "reply.body[\(index)]"
+    let lines = decodeLinesCore(index: index, src: src, signature: signature)
+    guard sourceExpr == nil else { return lines }
+    return [
+      "guard reply.body.indices.contains(\(index)) else { throw DBusCodegenError.typeMismatch }"
+    ] + lines
+  }
+
+  private static func decodeLinesCore(index: Int, src: String, signature: String) -> [String] {
     let v = "_v\(index)"
     switch signature {
     case "y":
@@ -178,7 +186,7 @@ public enum TypeMapper {
   }
 
   private static let swiftKeywords: Set<String> = [
-    "Any", "as", "associatedtype", "async", "await", "break", "case", "catch", "class",
+    "any", "Any", "as", "associatedtype", "async", "await", "break", "case", "catch", "class",
     "continue", "default", "defer", "deinit", "do", "else", "enum", "extension",
     "fallthrough", "false", "fileprivate", "final", "for", "func", "get", "guard",
     "if", "import", "in", "init", "inout", "internal", "is", "lazy", "let", "mutating",

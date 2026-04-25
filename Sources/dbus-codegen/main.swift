@@ -30,13 +30,13 @@ while !args.isEmpty {
   switch arg {
   case "--output-dir":
     guard !args.isEmpty else {
-      fputs("error: --output-dir requires a value\n", stderr)
+      FileHandle.standardError.write(Data("error: --output-dir requires a value\n".utf8))
       exit(1)
     }
     outputDir = args.removeFirst()
   case "--module-name":
     guard !args.isEmpty else {
-      fputs("error: --module-name requires a value\n", stderr)
+      FileHandle.standardError.write(Data("error: --module-name requires a value\n".utf8))
       exit(1)
     }
     moduleName = args.removeFirst()
@@ -45,7 +45,7 @@ while !args.isEmpty {
     exit(0)
   default:
     if arg.hasPrefix("--") {
-      fputs("error: unknown flag: \(arg)\n", stderr)
+      FileHandle.standardError.write(Data("error: unknown flag: \(arg)\n".utf8))
       exit(1)
     }
     files.append(arg)
@@ -53,7 +53,7 @@ while !args.isEmpty {
 }
 
 guard !files.isEmpty else {
-  fputs("error: no input files specified\n", stderr)
+  FileHandle.standardError.write(Data("error: no input files specified\n".utf8))
   printUsage()
   exit(1)
 }
@@ -66,7 +66,7 @@ for filePath in files {
   do {
     xml = try String(contentsOf: url, encoding: .utf8)
   } catch {
-    fputs("error: cannot read \(filePath): \(error)\n", stderr)
+    FileHandle.standardError.write(Data("error: cannot read \(filePath): \(error)\n".utf8))
     exitCode = 1
     continue
   }
@@ -75,7 +75,7 @@ for filePath in files {
   do {
     generated = try Codegen.generate(xml: xml, moduleName: moduleName)
   } catch {
-    fputs("error: \(filePath): \(error)\n", stderr)
+    FileHandle.standardError.write(Data("error: \(filePath): \(error)\n".utf8))
     exitCode = 1
     continue
   }
@@ -95,7 +95,8 @@ for filePath in files {
     try generated.write(to: outputURL, atomically: true, encoding: .utf8)
     print("Generated: \(outputURL.path)")
   } catch {
-    fputs("error: cannot write \(outputURL.path): \(error)\n", stderr)
+    FileHandle.standardError.write(
+      Data("error: cannot write \(outputURL.path): \(error)\n".utf8))
     exitCode = 1
   }
 }

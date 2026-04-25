@@ -11,7 +11,7 @@ public enum ServerGenerator {
       for property in interface.properties {
         if property.access == .read || property.access == .readWrite {
           w.writeLine(
-            "var \(TypeMapper.lowerCamelCase(property.name)): \(TypeMapper.swiftType(for: property.type)) { get async throws }"
+            "var \(TypeMapper.swiftIdentifier(property.name)): \(TypeMapper.swiftType(for: property.type)) { get async throws }"
           )
         }
         if property.access == .write || property.access == .readWrite {
@@ -89,6 +89,11 @@ public enum ServerGenerator {
     )
     writer.indent { w in
       // Decode in-args
+      if !method.inArgs.isEmpty {
+        w.writeLine(
+          "guard ctx.arguments.count >= \(method.inArgs.count) else { throw DBusCodegenError.typeMismatch }"
+        )
+      }
       for (i, arg) in method.inArgs.enumerated() {
         let swiftName = TypeMapper.swiftIdentifier(arg.name)
         let src = "ctx.arguments[\(i)]"
@@ -98,11 +103,11 @@ public enum ServerGenerator {
 
       // Call handler
       let callArgs = method.inArgs.map { arg in
-        let label = TypeMapper.lowerCamelCase(arg.name)
+        let label = TypeMapper.swiftIdentifier(arg.name)
         let value = TypeMapper.swiftIdentifier(arg.name)
         return "\(label): \(value)"
       }.joined(separator: ", ")
-      let handlerCall = "try await self.\(TypeMapper.lowerCamelCase(method.name))(\(callArgs))"
+      let handlerCall = "try await self.\(TypeMapper.swiftIdentifier(method.name))(\(callArgs))"
 
       if method.outArgs.isEmpty {
         w.writeLine("\(handlerCall)")
