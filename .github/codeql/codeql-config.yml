@@ -1,0 +1,4 @@
+name: "CodeQL Config"
+queries:
+  - uses: ./hummingbird-codeql/strict-concurrency
+  - uses: ./hummingbird-codeql/swift-nio

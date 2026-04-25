@@ -53,6 +53,14 @@ public actor DBusClient: Sendable {
     let logger: Logger
     private var continuations: [UInt32: AsyncThrowingStream<DBusMessage, Error>.Continuation] = [:]
     private var messageHandler: (@Sendable (DBusMessage) async -> Void)?
+    private var signalSubscribers:
+      [(
+        id: UInt64,
+        interface: String,
+        member: String,
+        continuation: AsyncStream<DBusMessage>.Continuation
+      )] = []
+    private var nextSignalSubscriberId: UInt64 = 0
 
     internal init(send: Send, logger: Logger) {
       self.send = send
@@ -62,6 +70,9 @@ public actor DBusClient: Sendable {
     deinit {
       for continuation in continuations.values {
         continuation.finish(throwing: CancellationError())
+      }
+      for subscriber in signalSubscribers {
+        subscriber.continuation.finish()
       }
     }
 
@@ -91,6 +102,25 @@ public actor DBusClient: Sendable {
             metadata: [
               "reply-to": "\(String(describing: replyTo))"
             ])
+        } else if case .signal = message.messageType {
+          let matchInterface = message.interface ?? ""
+          let matchMember = message.member ?? ""
+          var delivered = false
+          for subscriber in signalSubscribers
+          where subscriber.interface == matchInterface && subscriber.member == matchMember {
+            subscriber.continuation.yield(message)
+            delivered = true
+          }
+          if !delivered {
+            if let handler = messageHandler {
+              logger.trace("Forwarding unmatched signal to message handler")
+              await handler(message)
+            } else {
+              logger.debug(
+                "Received unhandled signal",
+                metadata: ["interface": "\(matchInterface)", "member": "\(matchMember)"])
+            }
+          }
         } else if let handler = messageHandler {
           logger.trace(
             "Dispatching message to handler (no replyTo)",
@@ -179,6 +209,28 @@ public actor DBusClient: Sendable {
       _ handler: @escaping @Sendable (DBusMessage) async -> Void
     ) async {
       messageHandler = handler
+    }
+
+    public func subscribeToSignal(
+      interface: String,
+      member: String
+    ) -> AsyncStream<DBusMessage> {
+      let id = nextSignalSubscriberId
+      nextSignalSubscriberId += 1
+      var storedContinuation: AsyncStream<DBusMessage>.Continuation!
+      let stream = AsyncStream<DBusMessage> { continuation in
+        storedContinuation = continuation
+      }
+      signalSubscribers.append(
+        (id: id, interface: interface, member: member, continuation: storedContinuation))
+      storedContinuation.onTermination = { [weak self] _ in
+        Task { [weak self] in await self?.removeSignalSubscriber(id: id) }
+      }
+      return stream
+    }
+
+    private func removeSignalSubscriber(id: UInt64) {
+      signalSubscribers.removeAll { $0.id == id }
     }
 
     private final class ReplyIteratorBox: @unchecked Sendable {
