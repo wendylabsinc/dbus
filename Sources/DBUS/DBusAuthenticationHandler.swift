@@ -173,7 +173,7 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
             context.fireErrorCaught(DBusAuthenticationError.invalidAuthCommand)
             return
           }
-          let payload = String(line.dropFirst(5)).trimmedWhitespace
+          let payload = String(line.dropFirst(5)).trimmingWhitespaces()
           do {
             let response = try currentMechanism.cookieResponse(for: payload)
             let out = context.channel.allocator.buffer(string: response)
@@ -199,7 +199,7 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
           }
         } else if line.starts(with: "REJECTED") {
           let trimmed = line.dropFirst("REJECTED".count)
-            .trimmedWhitespace
+            .trimmingWhitespaces()
           let offered = trimmed.isEmpty ? nil : Set(trimmed.split(separator: " ").map(String.init))
           handleRejected(offered: offered, context: context, rawLine: line)
         } else if line.starts(with: "ERROR") {

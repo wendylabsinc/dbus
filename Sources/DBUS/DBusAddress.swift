@@ -45,7 +45,7 @@ public enum DBusAddress: Sendable, Equatable {
   /// - Returns: The parsed ``DBusAddress``.
   /// - Throws: ``DBusAddressError`` when the string is empty or malformed.
   public static func parse(_ address: String) throws -> DBusAddress {
-    let trimmed = address.trimmedWhitespace
+    let trimmed = address.trimmingWhitespaces()
     guard !trimmed.isEmpty else {
       throw DBusAddressError.emptyAddress
     }
@@ -111,7 +111,7 @@ public enum DBusAddress: Sendable, Equatable {
   }
 
   private static func parseEntry(_ entry: Substring) throws -> DBusAddress? {
-    let trimmed = entry.trimmedWhitespace
+    let trimmed = entry.trimmingWhitespaces()
     guard !trimmed.isEmpty else { return nil }
 
     let parts = trimmed.split(separator: ":", maxSplits: 1)
