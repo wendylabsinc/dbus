@@ -1,0 +1,19 @@
+name: linkage-test
+
+on:
+  push:
+    branches: [ main, master, develop ]
+  pull_request:
+    branches: [ main, master, develop ]
+
+jobs:
+  linkage-test:
+    name: Linkage test
+    runs-on: ubuntu-22.04
+    container: swift:6.1
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+      - name: Run linkage test
+        shell: bash
+        run: ./scripts/run-linkage-test.sh

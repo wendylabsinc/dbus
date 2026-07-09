@@ -191,7 +191,7 @@ struct DBusAuthenticationHandlerTests {
     let responseLine = String(buffer: responseBuffer)
     #expect(responseLine.hasPrefix("DATA "), "Expected DATA response")
 
-    let responseHex = responseLine.dropFirst(5).trimmingCharacters(in: .whitespacesAndNewlines)
+    let responseHex = responseLine.dropFirst(5).trimmingWhitespaces()
     let decoded = try DBusAuthEncoding.decodeHexString(responseHex)
     let parts = decoded.split(whereSeparator: \.isWhitespace)
     guard parts.count == 2 else {
@@ -202,9 +202,8 @@ struct DBusAuthenticationHandlerTests {
     let clientChallenge = String(parts[0])
     let digest = String(parts[1])
     let composite = "\(serverChallenge):\(clientChallenge):\(cookieValue)"
-    let expectedDigest = Insecure.SHA1.hash(data: Array(composite.utf8))
-      .map { String(format: "%02x", $0) }
-      .joined()
+    let expectedDigest = DBusAuthEncoding.hexEncode(
+      Insecure.SHA1.hash(data: Array(composite.utf8)))
     #expect(digest == expectedDigest, "Digest should match server challenge and cookie")
 
     try channel.close().wait()

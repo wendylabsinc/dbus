@@ -9,3 +9,4 @@ DerivedData/
 .edge-build
 ExampleApp-container.tar
 .worktrees/
+Tests/LinkageTest/Package.resolved
