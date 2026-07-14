@@ -97,12 +97,18 @@ internal enum DBusAuthHash {
 }
 
 internal enum DBusAuthEncoding {
-  static func hexEncode(_ bytes: [UInt8]) -> String {
-    bytes.map { String(format: "%02x", $0) }.joined()
+  static func hexEncode(_ bytes: some Sequence<UInt8>) -> String {
+    let digits = Array("0123456789abcdef".utf8)
+    var out = [UInt8]()
+    for byte in bytes {
+      out.append(digits[Int(byte >> 4)])
+      out.append(digits[Int(byte & 0x0f)])
+    }
+    return String(decoding: out, as: UTF8.self)
   }
 
   static func hexEncode(_ string: String) -> String {
-    hexEncode(Array(string.utf8))
+    hexEncode(string.utf8)
   }
 
   static func hexDecode(_ hex: String) throws -> [UInt8] {
@@ -179,10 +185,10 @@ internal enum DBusAuthCookie {
     switch hash {
     case .sha1:
       let digest = Insecure.SHA1.hash(data: bytes)
-      return digest.map { String(format: "%02x", $0) }.joined()
+      return DBusAuthEncoding.hexEncode(digest)
     case .sha256:
       let digest = SHA256.hash(data: bytes)
-      return digest.map { String(format: "%02x", $0) }.joined()
+      return DBusAuthEncoding.hexEncode(digest)
     }
   }
 

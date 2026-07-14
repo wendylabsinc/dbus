@@ -1,3 +1,4 @@
+import Algorithms
 import Logging
 import NIO
 import NIOCore
@@ -9,49 +10,12 @@ import NIOExtras
   import Foundation
 #endif
 
-/// compiler directive that checks if the Darwin framework can be imported.
-/// The Darwin framework is only available on Apple platforms (macOS, iOS, iPadOS, tvOS, watchOS),
-/// so this condition effectively checks if the code is being compiled for a non-Apple platform.
-#if !canImport(Darwin)
-  // Provide CharacterSet and trimmingCharacters implementation for non-Apple platforms
-  extension Character {
-    var isWhitespaceOrNewline: Bool {
-      return self == " " || self == "\t" || self == "\n" || self == "\r"
-    }
+extension StringProtocol {
+  /// Returns the string with leading and trailing whitespace and newlines removed.
+  func trimmingWhitespaces() -> String {
+    String(self.trimming(while: \.isWhitespace))
   }
-
-  public struct CharacterSet: Sendable {
-    let characters: Set<Character>
-
-    static let whitespacesAndNewlines = CharacterSet(characters: [" ", "\t", "\n", "\r"])
-
-    init(characters: [Character]) {
-      self.characters = Set(characters)
-    }
-
-    func contains(_ character: Character) -> Bool {
-      return characters.contains(character)
-    }
-  }
-
-  extension String {
-    func trimmingCharacters(in set: CharacterSet) -> String {
-      var result = self
-
-      // Trim leading characters
-      while !result.isEmpty, let first = result.first, set.contains(first) {
-        result.removeFirst()
-      }
-
-      // Trim trailing characters
-      while !result.isEmpty, let last = result.last, set.contains(last) {
-        result.removeLast()
-      }
-
-      return result
-    }
-  }
-#endif
+}
 
 /// Authentication types supported for D-Bus connections.
 ///
@@ -199,7 +163,7 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
         logger.trace(
           "Received authentication response",
           metadata: [
-            "response": "\(line.trimmingCharacters(in: .whitespacesAndNewlines))"
+            "response": "\(line.trimmingWhitespaces())"
           ]
         )
 
@@ -209,7 +173,7 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
             context.fireErrorCaught(DBusAuthenticationError.invalidAuthCommand)
             return
           }
-          let payload = String(line.dropFirst(5)).trimmingCharacters(in: .whitespacesAndNewlines)
+          let payload = String(line.dropFirst(5)).trimmingWhitespaces()
           do {
             let response = try currentMechanism.cookieResponse(for: payload)
             let out = context.channel.allocator.buffer(string: response)
@@ -235,7 +199,7 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
           }
         } else if line.starts(with: "REJECTED") {
           let trimmed = line.dropFirst("REJECTED".count)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingWhitespaces()
           let offered = trimmed.isEmpty ? nil : Set(trimmed.split(separator: " ").map(String.init))
           handleRejected(offered: offered, context: context, rawLine: line)
         } else if line.starts(with: "ERROR") {
@@ -244,7 +208,7 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
           logger.debug(
             "Received unexpected authentication response",
             metadata: [
-              "response": "\(line.trimmingCharacters(in: .whitespacesAndNewlines))"
+              "response": "\(line.trimmingWhitespaces())"
             ]
           )
           state = .failed
@@ -256,7 +220,7 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
         logger.trace(
           "Received UNIX_FD negotiation response",
           metadata: [
-            "response": "\(line.trimmingCharacters(in: .whitespacesAndNewlines))"
+            "response": "\(line.trimmingWhitespaces())"
           ]
         )
 
@@ -272,7 +236,7 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
           logger.debug(
             "Received unexpected UNIX_FD negotiation response",
             metadata: [
-              "response": "\(line.trimmingCharacters(in: .whitespacesAndNewlines))"
+              "response": "\(line.trimmingWhitespaces())"
             ]
           )
           state = .failed
@@ -363,7 +327,7 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
         ])
       sendAuth(for: next, context: context)
     } else {
-      let trimmed = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
+      let trimmed = rawLine.trimmingWhitespaces()
       logger.debug(
         "Authentication rejected by server with no supported mechanisms",
         metadata: [
@@ -394,7 +358,7 @@ internal final class DBusAuthenticationHandler: ChannelDuplexHandler, @unchecked
       logger.trace(
         "Sending authentication command",
         metadata: [
-          "command": "\(authLine.trimmingCharacters(in: .whitespacesAndNewlines))"
+          "command": "\(authLine.trimmingWhitespaces())"
         ]
       )
     } catch {
