@@ -51,13 +51,21 @@ private final class ParserDelegate: NSObject, XMLParserDelegate {
       currentSignal = DBusSignal(name: name, args: [])
     case "arg":
       guard let type = attributes["type"] else { return }
-      let name = attributes["name"] ?? "arg"
       let direction = attributes["direction"] ?? "in"
-      let arg = DBusArg(name: name, type: type)
       if var method = currentMethod {
-        if direction == "out" { method.outArgs.append(arg) } else { method.inArgs.append(arg) }
+        if direction == "out" {
+          let name = attributes["name"] ?? "arg\(method.outArgs.count)"
+          let arg = DBusArg(name: name, type: type)
+          method.outArgs.append(arg)
+        } else {
+          let name = attributes["name"] ?? "arg\(method.inArgs.count)"
+          let arg = DBusArg(name: name, type: type)
+          method.inArgs.append(arg)
+        }
         currentMethod = method
       } else if var signal = currentSignal {
+        let name = attributes["name"] ?? "arg\(signal.args.count)"
+        let arg = DBusArg(name: name, type: type)
         signal.args.append(arg)
         currentSignal = signal
       }
