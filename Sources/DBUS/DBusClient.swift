@@ -159,7 +159,11 @@ public actor DBusClient: Sendable {
         unixFds: request.unixFds
       )
 
-      if request.flags.contains(.noReplyExpected) {
+      let expectsReply =
+        request.messageType == .methodCall
+        && !request.flags.contains(.noReplyExpected)
+
+      guard expectsReply else {
         logger.trace(
           "Send request that does not expect a reply",
           metadata: [
