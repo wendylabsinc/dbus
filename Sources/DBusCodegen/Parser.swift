@@ -51,7 +51,7 @@ private final class ParserDelegate: NSObject, XMLParserDelegate {
       currentSignal = DBusSignal(name: name, args: [])
     case "arg":
       guard let type = attributes["type"] else { return }
-      let name = attributes["name"] ?? "arg"
+      let name = attributes["name"] ?? ""
       let direction = attributes["direction"] ?? "in"
       let arg = DBusArg(name: name, type: type)
       if var method = currentMethod {
@@ -84,19 +84,19 @@ private final class ParserDelegate: NSObject, XMLParserDelegate {
   ) {
     switch elementName {
     case "method":
-      if let method = currentMethod {
+      if var method = currentMethod.take() {
+        setFallbackNames(&method.inArgs)
+        setFallbackNames(&method.outArgs)
         currentInterface?.methods.append(method)
-        currentMethod = nil
       }
     case "signal":
-      if let signal = currentSignal {
+      if var signal = currentSignal.take() {
+        setFallbackNames(&signal.args)
         currentInterface?.signals.append(signal)
-        currentSignal = nil
       }
     case "interface":
-      if let iface = currentInterface {
+      if let iface = currentInterface.take() {
         node.interfaces.append(iface)
-        currentInterface = nil
       }
     default:
       break
@@ -105,5 +105,26 @@ private final class ParserDelegate: NSObject, XMLParserDelegate {
 
   func parser(_ parser: XMLParser, parseErrorOccurred parseError: Error) {
     error = parseError
+  }
+}
+
+extension ParserDelegate {
+  private func setFallbackNames(_ args: inout [DBusArg]) {
+    var used = Set<String>()
+    var counter = 0
+
+    for i in args.indices {
+      if args[i].name.isEmpty {
+        var candidate: String
+        repeat {
+          candidate = "arg\(counter)"
+          counter += 1
+        } while used.contains(TypeMapper.swiftIdentifier(candidate))
+
+        args[i].name = candidate
+      }
+
+      used.insert(TypeMapper.swiftIdentifier(args[i].name))
+    }
   }
 }
