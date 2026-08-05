@@ -98,90 +98,106 @@ struct DBusClientTests {
   }
 
   @Test func sendTimesOutWhenReplyMissing() async throws {
-    let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+    try await withTestServer(handlers: { [NoReplyHandler()] }) { connection in
+      let request = DBusRequest.createMethodCall(
+        destination: "org.test.Service",
+        path: "/org/test/Object",
+        interface: "org.test.Interface",
+        method: "NoReply"
+      )
 
-    let server = try await ServerBootstrap(group: group)
-      .serverChannelOption(ChannelOptions.backlog, value: 16)
-      .childChannelInitializer { channel in
-        do {
-          try channel.pipeline.syncOperations.addHandlers(
-            ByteToMessageHandler(DBusMessageDecoder(logger: Logger(label: "dbus.test.server"))),
-            MessageToByteHandler(DBusMessageEncoder(logger: Logger(label: "dbus.test.server"))),
-            NoReplyHandler()
-          )
-          return channel.eventLoop.makeSucceededVoidFuture()
-        } catch {
-          return channel.eventLoop.makeFailedFuture(error)
-        }
+      do {
+        _ = try await connection.send(request, timeoutNanoseconds: 50_000_000)
+        #expect(Bool(false), "Expected timeout error")
+      } catch DBusError.timeout {
+        // Expected.
+      } catch {
+        #expect(Bool(false), "Unexpected error: \(error)")
       }
-      .bind(host: "127.0.0.1", port: 0)
-      .get()
-
-    let address = server.localAddress!
-
-    do {
-      let clientChannel = try await ClientBootstrap(group: group)
-        .channelInitializer { channel in
-          do {
-            try channel.pipeline.syncOperations.addHandlers(
-              ByteToMessageHandler(DBusMessageDecoder(logger: Logger(label: "dbus.test.client"))),
-              MessageToByteHandler(DBusMessageEncoder(logger: Logger(label: "dbus.test.client")))
-            )
-            return channel.eventLoop.makeSucceededVoidFuture()
-          } catch {
-            return channel.eventLoop.makeFailedFuture(error)
-          }
-        }
-        .connect(to: address)
-        .get()
-
-      let asyncChannel = try await clientChannel.eventLoop.submit {
-        try NIOAsyncChannel(
-          wrappingChannelSynchronously: clientChannel,
-          configuration: .init(inboundType: DBusMessage.self, outboundType: DBusMessage.self)
-        )
-      }.get()
-
-      _ = try await asyncChannel.executeThenClose { inbound, outbound in
-        let repliesBox = RepliesBox(DBusClient.Replies(iterator: inbound.makeAsyncIterator()))
-        let send = DBusClient.Send(writer: outbound)
-        let connection = DBusClient.Connection(
-          send: send, logger: Logger(label: "dbus.test.client"))
-
-        return try await withThrowingTaskGroup(of: Bool.self) { group in
-          group.addTask {
-            try await connection.run(replies: &repliesBox.replies)
-            return true
-          }
-
-          let request = DBusRequest.createMethodCall(
-            destination: "org.test.Service",
-            path: "/org/test/Object",
-            interface: "org.test.Interface",
-            method: "NoReply"
-          )
-
-          do {
-            _ = try await connection.send(request, timeoutNanoseconds: 50_000_000)
-            #expect(Bool(false), "Expected timeout error")
-          } catch DBusError.timeout {
-            // Expected.
-          } catch {
-            #expect(Bool(false), "Unexpected error: \(error)")
-          }
-
-          group.cancelAll()
-          return true
-        }
-      }
-    } catch {
-      _ = try? await server.close().get()
-      _ = try? await shutdownGroup(group)
-      throw error
     }
+  }
 
-    _ = try await server.close().get()
-    try await shutdownGroup(group)
+  @Test func sendDoesNotTimeoutWhenNoReplyExpected() async throws {
+    try await withTestServer(handlers: { [NoReplyHandler()] }) { connection in
+      let request = DBusRequest.createMethodCall(
+        destination: "org.test.Service",
+        path: "/org/test/Object",
+        interface: "org.test.Interface",
+        method: "NoReply",
+        flags: .noReplyExpected
+      )
+
+      do {
+        let reply = try await connection.send(request, timeoutNanoseconds: 50_000_000)
+        #expect(reply == nil)
+      } catch {
+        #expect(Bool(false), "Unexpected error: \(error)")
+      }
+    }
+  }
+
+  @Test func sendDoesNotTimeoutForMethodReturn() async throws {
+    try await withTestServer(handlers: { [NoReplyHandler()] }) { connection in
+      let request = DBusRequest.createMethodReturn(
+        replyingTo: .init(
+          byteOrder: .host,
+          messageType: .methodCall,
+          flags: [],
+          protocolVersion: 1,
+          serial: await connection.send.reserveSerial(),
+          headerFields: [],
+          body: []
+        ),
+      )
+
+      do {
+        let reply = try await connection.send(request, timeoutNanoseconds: 50_000_000)
+        #expect(reply == nil)
+      } catch {
+        #expect(Bool(false), "Unexpected error: \(error)")
+      }
+    }
+  }
+
+  @Test func sendDoesNotTimeoutForError() async throws {
+    try await withTestServer(handlers: { [NoReplyHandler()] }) { connection in
+      let request = DBusRequest.createError(
+        replyingTo: .init(
+          byteOrder: .host,
+          messageType: .methodCall,
+          flags: [],
+          protocolVersion: 1,
+          serial: await connection.send.reserveSerial(),
+          headerFields: [],
+          body: []
+        ),
+        errorName: "Error"
+      )
+
+      do {
+        let reply = try await connection.send(request, timeoutNanoseconds: 50_000_000)
+        #expect(reply == nil)
+      } catch {
+        #expect(Bool(false), "Unexpected error: \(error)")
+      }
+    }
+  }
+
+  @Test func sendDoesNotTimeoutForSignal() async throws {
+    try await withTestServer(handlers: { [NoReplyHandler()] }) { connection in
+      let request = DBusRequest.createSignal(
+        path: "/org/test/Object",
+        interface: "org.test.Interface",
+        name: "Changed"
+      )
+
+      do {
+        let reply = try await connection.send(request, timeoutNanoseconds: 50_000_000)
+        #expect(reply == nil)
+      } catch {
+        #expect(Bool(false), "Unexpected error: \(error)")
+      }
+    }
   }
 }
 
@@ -286,4 +302,79 @@ private func withTimeout<T: Sendable>(
     }
     return result
   }
+}
+
+private func withTestServer(
+  handlers: @Sendable @escaping () -> sending [any ChannelHandler],
+  action: @Sendable @escaping (DBusClient.Connection) async throws -> Void
+) async throws {
+  let group = MultiThreadedEventLoopGroup(numberOfThreads: 1)
+
+  let server = try await ServerBootstrap(group: group)
+    .serverChannelOption(ChannelOptions.backlog, value: 16)
+    .childChannelInitializer { channel in
+      do {
+        try channel.pipeline.syncOperations.addHandlers([
+          ByteToMessageHandler(DBusMessageDecoder(logger: Logger(label: "dbus.test.server"))),
+          MessageToByteHandler(DBusMessageEncoder(logger: Logger(label: "dbus.test.server"))),
+        ] + handlers())
+        return channel.eventLoop.makeSucceededVoidFuture()
+      } catch {
+        return channel.eventLoop.makeFailedFuture(error)
+      }
+    }
+    .bind(host: "127.0.0.1", port: 0)
+    .get()
+
+  let address = server.localAddress!
+
+  do {
+    let clientChannel = try await ClientBootstrap(group: group)
+      .channelInitializer { channel in
+        do {
+          try channel.pipeline.syncOperations.addHandlers(
+            ByteToMessageHandler(DBusMessageDecoder(logger: Logger(label: "dbus.test.client"))),
+            MessageToByteHandler(DBusMessageEncoder(logger: Logger(label: "dbus.test.client")))
+          )
+          return channel.eventLoop.makeSucceededVoidFuture()
+        } catch {
+          return channel.eventLoop.makeFailedFuture(error)
+        }
+      }
+      .connect(to: address)
+      .get()
+
+    let asyncChannel = try await clientChannel.eventLoop.submit {
+      try NIOAsyncChannel(
+        wrappingChannelSynchronously: clientChannel,
+        configuration: .init(inboundType: DBusMessage.self, outboundType: DBusMessage.self)
+      )
+    }.get()
+
+    _ = try await asyncChannel.executeThenClose { inbound, outbound in
+      let repliesBox = RepliesBox(DBusClient.Replies(iterator: inbound.makeAsyncIterator()))
+      let send = DBusClient.Send(writer: outbound)
+      let connection = DBusClient.Connection(
+        send: send, logger: Logger(label: "dbus.test.client"))
+
+      return try await withThrowingTaskGroup(of: Bool.self) { group in
+        group.addTask {
+          try await connection.run(replies: &repliesBox.replies)
+          return true
+        }
+
+        try await action(connection)
+
+        group.cancelAll()
+        return true
+      }
+    }
+  } catch {
+    _ = try? await server.close().get()
+    _ = try? await shutdownGroup(group)
+    throw error
+  }
+
+  _ = try await server.close().get()
+  try await shutdownGroup(group)
 }
