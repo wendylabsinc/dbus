@@ -85,6 +85,40 @@ struct ParserTests {
     #expect(method.outArgs.isEmpty)
   }
 
+  @Test func parsesUnnamedArgs() throws {
+    let xml = """
+      <node>
+        <interface name="org.example.Foo">
+          <method name="Foo">
+            <arg name="arg_1" type="s" direction="in"/>
+            <arg name="arg2" type="s" direction="in"/>
+            <arg type="s" direction="in"/>
+            <arg type="s" direction="in"/>
+            <arg type="s" direction="out"/>
+            <arg name="foobar" type="s" direction="out"/>
+          </method>
+          <signal name="Bar">
+            <arg name="foobar" type="s"/>
+            <arg type="s"/>
+          </signal>
+        </interface>
+      </node>
+      """
+    let node = try DBusParser.parse(xml: xml)
+
+    let method = try #require(node.interfaces[0].methods.first)
+    #expect(method.name == "Foo")
+    #expect(method.inArgs.count == 4)
+    #expect(method.inArgs.map(\.name) == ["arg_1", "arg2", "arg0", "arg3"])
+    #expect(method.outArgs.count == 2)
+    #expect(method.outArgs.map(\.name) == ["arg0", "foobar"])
+
+    let signal = try #require(node.interfaces[0].signals.first)
+    #expect(signal.name == "Bar")
+    #expect(signal.args.count == 2)
+    #expect(signal.args.map(\.name) == ["foobar", "arg0"])
+  }
+
   @Test func throwsOnInvalidXML() {
     #expect(throws: (any Error).self) {
       try DBusParser.parse(xml: "not xml at all <<<")
